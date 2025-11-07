@@ -1,0 +1,259 @@
+name: Deploy Feature Branch
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [ main, master ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  build-feature:
+    name: Build Feature Branch
+    runs-on: ubuntu-latest
+    if: ${{ !contains(github.head_ref, 'dependabot') }}
+
+    permissions:
+      contents: read
+      packages: write
+      pull-requests: write
+
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+      branch-name: ${{ steps.branch.outputs.name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Get clean branch name
+        id: branch
+        run: |
+          # Clean branch name for use in URLs (replace special chars with -)
+          CLEAN_BRANCH=$(echo "${{ github.head_ref }}" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          echo "name=${CLEAN_BRANCH}" >> $GITHUB_OUTPUT
+          echo "original=${{ github.head_ref }}" >> $GITHUB_OUTPUT
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=pr,prefix=pr-
+            type=sha,prefix=branch-${{ steps.branch.outputs.name }}-
+
+      - name: Build and push feature image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          cache-from: type=gha,scope=branch-${{ github.head_ref }}
+          cache-to: type=gha,scope=branch-${{ github.head_ref }},mode=max
+
+  deploy-feature-heroku:
+    name: Deploy Feature to Heroku Review App
+    runs-on: ubuntu-latest
+    needs: build-feature
+    if: vars.ENABLE_REVIEW_APPS == 'true'
+
+    environment:
+      name: review-${{ needs.build-feature.outputs.branch-name }}
+      url: https://flashcard-${{ needs.build-feature.outputs.branch-name }}.herokuapp.com
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create Heroku review app
+        run: |
+          # Install Heroku CLI
+          curl https://cli-assets.heroku.com/install.sh | sh
+
+          # Login to Heroku
+          echo ${{ secrets.HEROKU_API_KEY }} | heroku auth:token
+
+          # Create review app name
+          APP_NAME="flashcard-${{ needs.build-feature.outputs.branch-name }}"
+
+          # Create app if it doesn't exist
+          heroku apps:create $APP_NAME --region us || echo "App may already exist"
+
+          # Add PostgreSQL addon
+          heroku addons:create heroku-postgresql:mini -a $APP_NAME || echo "Addon may already exist"
+
+          # Set environment variables
+          heroku config:set -a $APP_NAME \
+            ANTHROPIC_API_KEY="${{ secrets.ANTHROPIC_API_KEY }}" \
+            OPENAI_API_KEY="${{ secrets.OPENAI_API_KEY }}" \
+            DEFAULT_AI_PROVIDER=anthropic
+
+          # Deploy container
+          heroku container:login
+          docker pull ${{ needs.build-feature.outputs.image-tag }}
+          docker tag ${{ needs.build-feature.outputs.image-tag }} registry.heroku.com/$APP_NAME/web
+          docker push registry.heroku.com/$APP_NAME/web
+          heroku container:release web -a $APP_NAME
+
+          # Run migrations
+          sleep 30  # Wait for app to be ready
+          heroku run -a $APP_NAME "uv run alembic upgrade head" || echo "Migrations may have failed"
+
+  deploy-feature-railway:
+    name: Deploy Feature to Railway
+    runs-on: ubuntu-latest
+    needs: build-feature
+    if: vars.ENABLE_RAILWAY_DEPLOYMENTS == 'true'
+
+    environment:
+      name: railway-${{ needs.build-feature.outputs.branch-name }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install Railway CLI
+        run: npm install -g @railway/cli
+
+      - name: Deploy to Railway
+        env:
+          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+        run: |
+          # Create a new Railway project for this branch
+          railway login --token $RAILWAY_TOKEN
+
+          # Deploy using the Docker image
+          railway up --service flashcard-${{ needs.build-feature.outputs.branch-name }}
+
+  comment-deployment:
+    name: Comment Deployment URLs
+    runs-on: ubuntu-latest
+    needs: [build-feature, deploy-feature-heroku]
+    if: always() && needs.build-feature.result == 'success'
+
+    permissions:
+      pull-requests: write
+
+    steps:
+      - name: Comment PR with deployment info
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+
+            // Find existing deployment comment
+            const botComment = comments.find(comment =>
+              comment.user.type === 'Bot' && comment.body.includes('🚀 Feature Deployment')
+            );
+
+            const branchName = '${{ needs.build-feature.outputs.branch-name }}';
+            const herokuStatus = '${{ needs.deploy-feature-heroku.result }}';
+
+            let body = `## 🚀 Feature Deployment
+
+            **Branch:** \`${{ github.head_ref }}\`
+            **Commit:** \`${{ github.sha }}\`
+            **Docker Image:** \`${{ needs.build-feature.outputs.image-tag }}\`
+
+            ### Deployment Status
+            `;
+
+            if (herokuStatus === 'success') {
+              body += `
+            ✅ **Heroku Review App:** https://flashcard-${branchName}.herokuapp.com
+            📊 **API Docs:** https://flashcard-${branchName}.herokuapp.com/docs
+            ❤️ **Health Check:** https://flashcard-${branchName}.herokuapp.com/health
+              `;
+            } else if (herokuStatus === 'failure') {
+              body += `
+            ❌ **Heroku Deployment:** Failed - check workflow logs
+              `;
+            } else {
+              body += `
+            ⏳ **Heroku Deployment:** In progress or skipped
+              `;
+            }
+
+            body += `
+
+            ### Testing Instructions
+            1. Visit the deployed URL above
+            2. Import sample flashcards from the \`sample_flashcards/\` directory
+            3. Test the AI grading functionality
+            4. Verify any new features work as expected
+
+            ### Database
+            Each review app has its own PostgreSQL database with the latest schema.
+
+            ---
+            *This comment will be updated automatically when deployments change.*
+            `;
+
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: body
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: body
+              });
+            }
+
+  cleanup-on-close:
+    name: Cleanup Review Apps
+    runs-on: ubuntu-latest
+    if: github.event.action == 'closed'
+
+    steps:
+      - name: Cleanup Heroku review app
+        if: vars.ENABLE_REVIEW_APPS == 'true'
+        run: |
+          # Install Heroku CLI
+          curl https://cli-assets.heroku.com/install.sh | sh
+
+          # Login to Heroku
+          echo ${{ secrets.HEROKU_API_KEY }} | heroku auth:token
+
+          # Get clean branch name
+          CLEAN_BRANCH=$(echo "${{ github.head_ref }}" | sed 's/[^a-zA-Z0-9]/-/g' | tr '[:upper:]' '[:lower:]')
+          APP_NAME="flashcard-${CLEAN_BRANCH}"
+
+          # Delete the review app
+          heroku apps:destroy $APP_NAME --confirm $APP_NAME || echo "App may not exist"
+
+      - name: Comment cleanup
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: '🧹 **Review app cleanup completed** - All temporary resources have been removed.'
+            });

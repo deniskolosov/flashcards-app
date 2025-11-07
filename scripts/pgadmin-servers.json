@@ -1,0 +1,34 @@
+{
+  "Servers": {
+    "1": {
+      "Name": "Flashcard App - Development",
+      "Group": "Development",
+      "Port": 5432,
+      "Username": "flashcards",
+      "Host": "postgres",
+      "SSLMode": "prefer",
+      "MaintenanceDB": "flashcards_dev",
+      "PassFile": "/tmp/pgpassfile"
+    },
+    "2": {
+      "Name": "Flashcard App - Test DB",
+      "Group": "Development",
+      "Port": 5432,
+      "Username": "flashcards",
+      "Host": "postgres",
+      "SSLMode": "prefer",
+      "MaintenanceDB": "flashcards_test",
+      "PassFile": "/tmp/pgpassfile"
+    },
+    "3": {
+      "Name": "Flashcard App - Staging DB",
+      "Group": "Development",
+      "Port": 5432,
+      "Username": "flashcards",
+      "Host": "postgres",
+      "SSLMode": "prefer",
+      "MaintenanceDB": "flashcards_staging",
+      "PassFile": "/tmp/pgpassfile"
+    }
+  }
+}

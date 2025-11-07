@@ -1,0 +1,94 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: flashcard-postgres
+    restart: unless-stopped
+    environment:
+      - POSTGRES_DB=flashcards_dev
+      - POSTGRES_USER=flashcards
+      - POSTGRES_PASSWORD=flashcards_dev_password
+      - POSTGRES_INITDB_ARGS=--auth-host=scram-sha-256
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    ports:
+      - "5432:5432"
+    networks:
+      - flashcard-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashcards -d flashcards_dev"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # FastAPI Application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: flashcard-app
+    restart: unless-stopped
+    environment:
+      - DATABASE_URL=postgresql://flashcards:flashcards_dev_password@postgres:5432/flashcards_dev
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - DEFAULT_AI_PROVIDER=${DEFAULT_AI_PROVIDER:-anthropic}
+      - ANTHROPIC_MODEL=${ANTHROPIC_MODEL:-claude-sonnet-4-20250514}
+      - OPENAI_MODEL=${OPENAI_MODEL:-gpt-4o}
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount source code for development hot-reload
+      - ./backend:/app/backend:ro
+      - ./frontend:/app/frontend:ro
+      - ./alembic:/app/alembic:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      # Mount logs directory
+      - ./logs:/app/logs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - flashcard-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: flashcard-pgadmin
+    restart: unless-stopped
+    environment:
+      - PGADMIN_DEFAULT_EMAIL=admin@flashcards.local
+      - PGADMIN_DEFAULT_PASSWORD=admin_password
+      - PGADMIN_CONFIG_SERVER_MODE=False
+      - PGADMIN_CONFIG_MASTER_PASSWORD_REQUIRED=False
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+      - ./scripts/pgadmin-servers.json:/pgadmin4/servers.json:ro
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - flashcard-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+    name: flashcard_postgres_data
+  pgadmin_data:
+    name: flashcard_pgadmin_data
+
+networks:
+  flashcard-network:
+    name: flashcard-network
+    driver: bridge

@@ -1,0 +1,16 @@
+# docker-compose.override.yml
+# This file is automatically loaded by docker-compose and provides development overrides
+
+version: '3.8'
+
+services:
+  app:
+    # Development-specific settings
+    command: ["uvicorn", "backend.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    environment:
+      - ENVIRONMENT=development
+      - DEBUG=true
+    volumes:
+      # Additional development mounts for hot reload
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./.env:/app/.env:ro

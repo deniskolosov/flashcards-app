@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flashcard Study App</title>
+    <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Flashcard Study App</h1>
+            <div class="header-controls">
+                <button id="settings-btn" class="btn btn-icon" title="Settings">⚙️</button>
+            </div>
+            <div id="session-info" class="hidden">
+                <span id="card-counter">Card 0 of 0</span>
+                <span id="avg-score">Avg Score: --</span>
+            </div>
+        </header>
+
+        <!-- Deck Selection Screen -->
+        <div id="deck-selection" class="screen">
+            <h2>Select a Deck</h2>
+            <div id="deck-controls" class="deck-controls">
+                <div class="filter-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="show-empty-decks-checkbox">
+                        <span>Show Empty Decks</span>
+                    </label>
+                </div>
+                <div class="selection-controls">
+                    <label class="checkbox-label">
+                        <input type="checkbox" id="select-all-checkbox">
+                        <span>Select All</span>
+                    </label>
+                    <button id="delete-selected-btn" class="btn btn-danger hidden">Delete Selected (<span id="selected-count">0</span>)</button>
+                </div>
+            </div>
+            <div id="deck-list" class="deck-list">
+                <!-- Decks will be loaded here -->
+            </div>
+            <div class="actions">
+                <button id="import-btn" class="btn btn-secondary">Import from Markdown</button>
+            </div>
+            <div id="import-form" class="hidden">
+                <h3>Import Flashcards</h3>
+                <input type="file" id="file-input" accept=".md" />
+                <input type="text" id="deck-name-input" placeholder="Deck name (optional)" />
+                <button id="upload-btn" class="btn">
+                    Upload
+                    <span class="keyboard-hint">(⌘+Enter)</span>
+                </button>
+                <button id="cancel-import-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Study Session Screen -->
+        <div id="study-session" class="screen hidden">
+            <div class="card-container">
+                <div id="question-card" class="card">
+                    <h2>Question</h2>
+                    <div id="question-text" class="question-text"></div>
+                </div>
+
+                <div id="answer-section" class="answer-section">
+                    <label for="user-answer">Your Answer:</label>
+                    <textarea
+                        id="user-answer"
+                        rows="6"
+                        placeholder="Type your answer here..."></textarea>
+
+                    <div class="actions">
+                        <button id="submit-answer-btn" class="btn btn-primary">
+                            Submit Answer
+                            <span class="keyboard-hint">(⌘+Enter)</span>
+                        </button>
+                        <button id="skip-btn" class="btn btn-secondary">Skip</button>
+                        <button id="end-session-btn" class="btn btn-danger">
+                            End Session
+                            <span class="keyboard-hint">(Esc)</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div id="feedback-section" class="feedback-section hidden">
+                    <h3>Grading Result</h3>
+                    <div class="grade-badge" id="grade-badge"></div>
+                    <div class="score-display">
+                        <span class="score-label">Score:</span>
+                        <span id="score-value" class="score-value"></span>
+                    </div>
+                    <div class="feedback-text">
+                        <h4>Feedback:</h4>
+                        <p id="feedback-text"></p>
+                    </div>
+                    <div id="concepts-section" class="concepts-section">
+                        <div id="concepts-covered" class="concepts covered hidden">
+                            <h4>Concepts Covered:</h4>
+                            <ul id="covered-list"></ul>
+                        </div>
+                        <div id="concepts-missed" class="concepts missed hidden">
+                            <h4>Concepts Missed:</h4>
+                            <ul id="missed-list"></ul>
+                        </div>
+                    </div>
+                    <div class="actions">
+                        <button id="next-card-btn" class="btn btn-primary">
+                            Next Card
+                            <span class="keyboard-hint">(⌘+→)</span>
+                        </button>
+                        <button id="end-session-btn-feedback" class="btn btn-secondary">
+                            End Session
+                            <span class="keyboard-hint">(Esc)</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="reference-answer-section" class="reference-answer hidden">
+                <h4>Reference Answer:</h4>
+                <div id="reference-answer-text"></div>
+            </div>
+        </div>
+
+        <!-- Session Complete Screen -->
+        <div id="session-complete" class="screen hidden">
+            <h2>Session Complete!</h2>
+            <div class="stats-summary">
+                <div class="stat-item">
+                    <span class="stat-label">Cards Reviewed:</span>
+                    <span id="final-cards-reviewed" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Average Score:</span>
+                    <span id="final-avg-score" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Grade Distribution:</span>
+                    <div id="grade-distribution" class="grade-distribution"></div>
+                </div>
+            </div>
+            <div class="actions">
+                <button id="return-to-decks-btn" class="btn btn-primary">Return to Decks</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deck Management Modal -->
+    <div id="deck-management-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modal-title">Edit Deck</h3>
+            <form id="deck-form">
+                <div class="form-group">
+                    <label for="deck-name-edit">Deck Name:</label>
+                    <input type="text" id="deck-name-edit" required>
+                </div>
+                <div class="form-group">
+                    <label for="deck-source-edit">Source File:</label>
+                    <input type="text" id="deck-source-edit" placeholder="(optional)">
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">
+                        Save
+                        <span class="keyboard-hint">(⌘+Enter)</span>
+                    </button>
+                    <button type="button" id="cancel-edit-btn" class="btn btn-secondary">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-confirmation-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Delete Deck</h3>
+            <p>Are you sure you want to delete "<span id="delete-deck-name"></span>"?</p>
+            <p class="warning">This will also delete all flashcards in this deck. This action cannot be undone.</p>
+            <div class="form-actions">
+                <button id="confirm-delete-btn" class="btn btn-danger">Delete</button>
+                <button id="cancel-delete-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bulk Delete Confirmation Modal -->
+    <div id="bulk-delete-confirmation-modal" class="modal hidden">
+        <div class="modal-content">
+            <h3>Delete Multiple Decks</h3>
+            <p>Are you sure you want to delete <strong><span id="bulk-delete-count">0</span></strong> deck(s)?</p>
+            <div id="bulk-delete-list" class="deck-list-preview">
+                <!-- Selected deck names will be shown here -->
+            </div>
+            <p class="warning">This will also delete all flashcards in these decks. This action cannot be undone.</p>
+            <div class="form-actions">
+                <button id="confirm-bulk-delete-btn" class="btn btn-danger">Delete All</button>
+                <button id="cancel-bulk-delete-btn" class="btn btn-secondary">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="loading" class="loading hidden">
+        <div class="spinner"></div>
+        <p>Loading...</p>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settings-modal" class="modal hidden">
+        <div class="modal-content settings-modal">
+            <h3>Settings</h3>
+
+            <div class="settings-section">
+                <h4>Spaced Repetition Algorithm</h4>
+                <p class="settings-description">
+                    Configure how the spaced repetition algorithm calculates review intervals.
+                </p>
+
+                <div class="form-group">
+                    <label for="initial-interval">Initial Interval (days)</label>
+                    <input type="number" id="initial-interval" min="1" max="365" step="1">
+                    <small>Days before first review for new cards</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="easy-multiplier">Perfect Grade Multiplier</label>
+                    <input type="number" id="easy-multiplier" min="1.1" max="5.0" step="0.1">
+                    <small>Multiplier applied when you answer "Perfect"</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="good-multiplier">Good Grade Multiplier</label>
+                    <input type="number" id="good-multiplier" min="1.1" max="5.0" step="0.1">
+                    <small>Multiplier applied when you answer "Good"</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="min-interval">Minimum Interval (days)</label>
+                    <input type="number" id="min-interval" min="1" max="30" step="1">
+                    <small>Shortest possible interval between reviews</small>
+                </div>
+
+                <div class="form-group">
+                    <label for="max-interval">Maximum Interval (days)</label>
+                    <input type="number" id="max-interval" min="30" max="1825" step="1">
+                    <small>Longest possible interval between reviews</small>
+                </div>
+            </div>
+
+            <div class="form-actions">
+                <button id="save-settings-btn" class="btn btn-primary">
+                    Save Settings
+                </button>
+                <button id="cancel-settings-btn" class="btn btn-secondary">Cancel</button>
+                <button id="reset-settings-btn" class="btn btn-outline">Reset to Defaults</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-message" class="error-message hidden"></div>
+
+    <!-- Custom Notification System -->
+    <div id="notification-container" class="notification-container">
+        <!-- Notifications will be dynamically inserted here -->
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirmation-modal" class="modal hidden">
+        <div class="modal-content confirmation-modal">
+            <div class="confirmation-icon" id="confirmation-icon">❓</div>
+            <h3 id="confirmation-title">Confirm Action</h3>
+            <p id="confirmation-message">Are you sure you want to proceed?</p>
+            <div class="form-actions">
+                <button id="confirm-yes-btn" class="btn btn-primary">Yes</button>
+                <button id="confirm-no-btn" class="btn btn-secondary">No</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
