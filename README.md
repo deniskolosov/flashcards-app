@@ -198,9 +198,10 @@ study-cards/
 │   └── app.js            # JavaScript application logic
 ├── tests/                # 65 passing tests
 ├── sample_flashcards/    # Example markdown files
+├── docs/                 # Documentation files
 ├── pyproject.toml        # Dependencies (managed by uv)
 ├── ruff.toml             # Linting configuration
-└── DEVELOPMENT.md        # Comprehensive dev guide
+└── README.md             # This file
 ```
 
 ### Running Tests
@@ -406,7 +407,7 @@ Tests use a separate `flashcards_test` database that is automatically:
 ### Documentation
 
 For detailed testing information, troubleshooting, and advanced usage:
-👉 **[See TESTING.md](TESTING.md)**
+👉 **[See TESTING.md](docs/TESTING.md)**
 
 ## License
 
@@ -414,13 +415,13 @@ This project is provided as-is for educational and personal use.
 
 ## Contributing
 
-For development guidelines, architecture decisions, and detailed documentation, see [DEVELOPMENT.md](DEVELOPMENT.md).
+For development guidelines, architecture decisions, and detailed documentation, see [DEVELOPMENT.md](docs/DEVELOPMENT.md).
 
 ## Support
 
 - **Issues**: Report bugs or request features via GitHub issues
 - **API Documentation**: Full interactive docs at `http://localhost:8000/docs`
-- **Development Guide**: See `DEVELOPMENT.md` for comprehensive developer documentation
+- **Development Guide**: See `docs/DEVELOPMENT.md` for comprehensive developer documentation
 
 ---
 
