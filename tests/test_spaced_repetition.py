@@ -208,9 +208,7 @@ class TestCalculateNextReview:
         expected_interval = int(3 * 2.65 * 2.5 / 1.8)  # ~11
         assert result.interval_days == expected_interval
         assert result.ease_factor == 2.5 + 0.15
-        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(
-            days=expected_interval
-        )
+        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(days=expected_interval)
         assert result.next_review_date == expected_date
 
     def test_ease_factor_bounds(self):
@@ -461,9 +459,7 @@ class TestSpacedRepetitionEdgeCases:
 
         # Should be capped at maximum
         assert result.interval_days <= config.maximum_interval_days
-        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(
-            days=result.interval_days
-        )
+        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(days=result.interval_days)
         assert result.next_review_date == expected_date
 
     def test_zero_interval_handling(self):

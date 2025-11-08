@@ -50,11 +50,6 @@ jobs:
       - name: Install dependencies
         run: uv sync
 
-      - name: Run database migrations
-        env:
-          DATABASE_URL: postgresql://flashcards:test_password@localhost:5432/flashcards_test
-        run: uv run alembic upgrade head
-
       - name: Run tests with PostgreSQL
         env:
           DATABASE_URL: postgresql://flashcards:test_password@localhost:5432/flashcards_test
