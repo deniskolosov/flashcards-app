@@ -11,6 +11,7 @@ What is the difference between @staticmethod and @classmethod in Python?
 
 ---
 """
+
 import re
 
 
@@ -24,7 +25,7 @@ def parse_flashcard_file(file_path: str) -> list[dict[str, str]]:
     Returns:
         List of flashcard dictionaries with 'question' and 'answer' keys
     """
-    with open(file_path, encoding='utf-8') as f:
+    with open(file_path, encoding="utf-8") as f:
         content = f.read()
 
     return parse_flashcard_content(content)
@@ -44,7 +45,7 @@ def parse_flashcard_content(content: str) -> list[dict[str, str]]:
 
     # Split by horizontal rules first, then process each section
     # Handle both --- and *** as separators
-    sections = re.split(r'\n---+\n|\n\*\*\*+\n', content)
+    sections = re.split(r"\n---+\n|\n\*\*\*+\n", content)
 
     for section in sections:
         section = section.strip()
@@ -53,17 +54,11 @@ def parse_flashcard_content(content: str) -> list[dict[str, str]]:
 
         # Look for ## heading (question) and ### Answer
         # Match ## (with optional "Question N" text) followed by content
-        question_match = re.search(
-            r'^##\s+(.+?)(?=\n###|\Z)',
-            section,
-            re.MULTILINE | re.DOTALL
-        )
+        question_match = re.search(r"^##\s+(.+?)(?=\n###|\Z)", section, re.MULTILINE | re.DOTALL)
 
         # Match ### Answer followed by content
         answer_match = re.search(
-            r'###\s+[Aa]nswer\s*\n(.+?)(?=\n##|\Z)',
-            section,
-            re.MULTILINE | re.DOTALL
+            r"###\s+[Aa]nswer\s*\n(.+?)(?=\n##|\Z)", section, re.MULTILINE | re.DOTALL
         )
 
         if question_match and answer_match:
@@ -71,12 +66,9 @@ def parse_flashcard_content(content: str) -> list[dict[str, str]]:
             answer_text = answer_match.group(1).strip()
 
             # Remove "Question N" prefix if present
-            question_text = re.sub(r'^[Qq]uestion\s+\d+\s*\n', '', question_text).strip()
+            question_text = re.sub(r"^[Qq]uestion\s+\d+\s*\n", "", question_text).strip()
 
-            flashcards.append({
-                'question': question_text,
-                'answer': answer_text
-            })
+            flashcards.append({"question": question_text, "answer": answer_text})
 
     return flashcards
 
@@ -98,10 +90,10 @@ def validate_flashcard_file(file_path: str) -> tuple[bool, str]:
             return False, "No valid flashcards found in file"
 
         for i, card in enumerate(flashcards):
-            if not card['question']:
-                return False, f"Card {i+1} has empty question"
-            if not card['answer']:
-                return False, f"Card {i+1} has empty answer"
+            if not card["question"]:
+                return False, f"Card {i + 1} has empty question"
+            if not card["answer"]:
+                return False, f"Card {i + 1} has empty answer"
 
         return True, f"Valid file with {len(flashcards)} flashcard(s)"
 

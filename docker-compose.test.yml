@@ -1,0 +1,89 @@
+version: '3.8'
+
+services:
+  postgres-test:
+    image: postgres:15-alpine
+    container_name: flashcard-postgres-test
+    environment:
+      - POSTGRES_DB=flashcards_test
+      - POSTGRES_USER=flashcards
+      - POSTGRES_PASSWORD=test_password
+    ports:
+      - "5433:5432"  # Different port to avoid conflict with local PostgreSQL
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U flashcards -d flashcards_test"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    tmpfs:
+      - /var/lib/postgresql/data  # In-memory for speed
+    command: >
+      postgres
+      -c shared_preload_libraries=''
+      -c max_connections=100
+      -c shared_buffers=128MB
+      -c effective_cache_size=256MB
+      -c maintenance_work_mem=32MB
+      -c checkpoint_completion_target=0.7
+      -c wal_buffers=16MB
+      -c default_statistics_target=100
+      -c random_page_cost=1.1
+      -c effective_io_concurrency=200
+
+  test-runner:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: flashcard-test-runner
+    environment:
+      # Override database connection for Docker
+      - POSTGRES_HOST=postgres-test
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=flashcards_test
+      - POSTGRES_USER=flashcards
+      - POSTGRES_PASSWORD=test_password
+      # Test-specific environment
+      - PYTHONPATH=/app
+      - PYTEST_CURRENT_TEST=${PYTEST_CURRENT_TEST}
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    volumes:
+      # Mount source code as read-only
+      - ./backend:/app/backend:ro
+      - ./tests:/app/tests:ro
+      - ./alembic:/app/alembic:ro
+      - ./pyproject.toml:/app/pyproject.toml:ro
+      - ./alembic.ini:/app/alembic.ini:ro
+      # Mount coverage output (optional)
+      - ./htmlcov:/app/htmlcov
+    working_dir: /app
+    command: >
+      sh -c "
+        echo '🐳 Docker Test Environment';
+        echo '   PostgreSQL: postgres-test:5432';
+        echo '   Database: flashcards_test';
+        echo '';
+        echo '🧪 Running tests...';
+        uv run pytest tests/ -v --tb=short --cov=backend --cov-report=html --cov-report=term
+      "
+
+  # Utility service for database management
+  db-admin:
+    image: postgres:15-alpine
+    container_name: flashcard-db-admin
+    environment:
+      - PGHOST=postgres-test
+      - PGPORT=5432
+      - PGDATABASE=flashcards_test
+      - PGUSER=flashcards
+      - PGPASSWORD=test_password
+    depends_on:
+      postgres-test:
+        condition: service_healthy
+    profiles:
+      - admin
+    command: psql
+    stdin_open: true
+    tty: true

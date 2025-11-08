@@ -8,34 +8,37 @@ Based on the SuperMemo 2 algorithm with improvements:
 - Grade mapping: Perfect(4) -> Good(3) -> Partial(2) -> Wrong(1)
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import datetime, timedelta
 from enum import Enum
 from typing import NamedTuple
 
 
 class Grade(Enum):
     """Grade values for spaced repetition algorithm."""
-    WRONG = 1      # Reset learning
-    PARTIAL = 2    # Retry soon
-    GOOD = 3       # Normal progression
-    PERFECT = 4    # Accelerated progression
+
+    WRONG = 1  # Reset learning
+    PARTIAL = 2  # Retry soon
+    GOOD = 3  # Normal progression
+    PERFECT = 4  # Accelerated progression
 
 
 class SpacedRepetitionConfig(NamedTuple):
     """Configuration for spaced repetition algorithm."""
-    initial_interval_days: int = 1       # Initial interval for new cards
-    easy_multiplier: float = 2.5         # Multiplier for Perfect grade
-    good_multiplier: float = 1.8         # Multiplier for Good grade
-    minimum_interval_days: int = 1       # Minimum interval between reviews
-    maximum_interval_days: int = 180     # Maximum interval between reviews
-    ease_factor_minimum: float = 1.3     # Minimum ease factor
-    ease_factor_maximum: float = 3.0     # Maximum ease factor
-    ease_factor_decrease: float = 0.2    # Decrease for Partial grade
-    ease_factor_increase: float = 0.15   # Increase for Perfect grade
+
+    initial_interval_days: int = 1  # Initial interval for new cards
+    easy_multiplier: float = 2.5  # Multiplier for Perfect grade
+    good_multiplier: float = 1.8  # Multiplier for Good grade
+    minimum_interval_days: int = 1  # Minimum interval between reviews
+    maximum_interval_days: int = 180  # Maximum interval between reviews
+    ease_factor_minimum: float = 1.3  # Minimum ease factor
+    ease_factor_maximum: float = 3.0  # Maximum ease factor
+    ease_factor_decrease: float = 0.2  # Decrease for Partial grade
+    ease_factor_increase: float = 0.15  # Increase for Perfect grade
 
 
 class SpacedRepetitionResult(NamedTuple):
     """Result of spaced repetition calculation."""
+
     next_review_date: datetime
     ease_factor: float
     interval_days: int
@@ -84,19 +87,13 @@ def calculate_next_review(
     if grade == Grade.WRONG:
         # Reset on wrong answer
         repetitions = 0
-        ease_factor = max(
-            config.ease_factor_minimum,
-            ease_factor - config.ease_factor_decrease
-        )
+        ease_factor = max(config.ease_factor_minimum, ease_factor - config.ease_factor_decrease)
         interval_days = config.initial_interval_days
 
     elif grade == Grade.PARTIAL:
         # Retry soon but don't reset completely
         repetitions = 0  # Reset repetition counter
-        ease_factor = max(
-            config.ease_factor_minimum,
-            ease_factor - config.ease_factor_decrease
-        )
+        ease_factor = max(config.ease_factor_minimum, ease_factor - config.ease_factor_decrease)
         interval_days = max(1, current_interval_days // 2)  # Half the interval
 
     elif grade == Grade.GOOD:
@@ -112,24 +109,26 @@ def calculate_next_review(
     elif grade == Grade.PERFECT:
         # Accelerated progression
         repetitions += 1
-        ease_factor = min(
-            config.ease_factor_maximum,
-            ease_factor + config.ease_factor_increase
-        )
+        ease_factor = min(config.ease_factor_maximum, ease_factor + config.ease_factor_increase)
 
         if repetitions == 1:
             interval_days = config.initial_interval_days
         elif repetitions == 2:
             interval_days = int(config.initial_interval_days * config.easy_multiplier)
         else:
-            interval_days = int(current_interval_days * ease_factor * config.easy_multiplier / config.good_multiplier)
+            interval_days = int(
+                current_interval_days
+                * ease_factor
+                * config.easy_multiplier
+                / config.good_multiplier
+            )
 
     # Apply min/max constraints
     interval_days = max(config.minimum_interval_days, interval_days)
     interval_days = min(config.maximum_interval_days, interval_days)
 
     # Calculate next review date
-    next_review_date = datetime.now(UTC) + timedelta(days=interval_days)
+    next_review_date = datetime.now() + timedelta(days=interval_days)
 
     return SpacedRepetitionResult(
         next_review_date=next_review_date,
@@ -152,12 +151,15 @@ def is_card_due(next_review_date: datetime | None) -> bool:
     if next_review_date is None:
         return True  # New cards are always due
 
-    current_time = datetime.now(UTC)
+    current_time = datetime.now()
 
     # Handle timezone-naive datetimes from database
     if next_review_date.tzinfo is None:
-        # Convert to UTC for comparison
-        next_review_date = next_review_date.replace(tzinfo=UTC)
+        # Compare as timezone-naive datetimes
+        pass
+    else:
+        # Remove timezone for comparison with naive datetime
+        next_review_date = next_review_date.replace(tzinfo=None)
 
     return current_time >= next_review_date
 
@@ -174,6 +176,6 @@ def get_due_cards_count(reviews: list[dict]) -> int:
     """
     due_count = 0
     for review in reviews:
-        if is_card_due(review.get('next_review_date')):
+        if is_card_due(review.get("next_review_date")):
             due_count += 1
     return due_count

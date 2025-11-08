@@ -1,14 +1,12 @@
 """
 Tests for FastAPI endpoints (integration tests).
 """
+
 import os
 import tempfile
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
 from backend import main
 from backend.config import ConfigManager
@@ -21,40 +19,13 @@ from backend.schemas import GradingResult
 
 # Test fixtures
 @pytest.fixture
-def test_db():
-    """Create a fresh in-memory test database for each test."""
-    # Use StaticPool to ensure all sessions share the same in-memory database connection
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool  # Critical for in-memory SQLite testing
-    )
-
-    # Create tables
-    Base.metadata.create_all(engine)
-
-    # Create a custom Database instance
-    db = Database.__new__(Database)
-    db.engine = engine
-    db.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-    yield db
-
-    # Clean up
-    Base.metadata.drop_all(engine)
-    engine.dispose()
-
-
-@pytest.fixture
 def client(test_db):
     """Create a test client with dependency overrides."""
     # Create service instances that use test_db
     config_dao = ConfigDAO(test_db)
     config_manager = ConfigManager(config_dao=config_dao)
     grading_service = GradingService(
-        anthropic_api_key="test_key",
-        openai_api_key="test_key",
-        default_provider="anthropic"
+        anthropic_api_key="test_key", openai_api_key="test_key", default_provider="anthropic"
     )
 
     # Use FastAPI's dependency override system
@@ -107,8 +78,7 @@ def test_health_check(client):
 def test_create_deck(client):
     """Test creating a deck."""
     response = client.post(
-        "/api/decks",
-        json={"name": "Python Basics", "source_file": "/path/to/file.md"}
+        "/api/decks", json={"name": "Python Basics", "source_file": "/path/to/file.md"}
     )
 
     assert response.status_code == 200
@@ -144,7 +114,7 @@ def test_get_decks_filter_empty_by_default(client):
     # Add flashcard to first deck
     client.post(
         f"/api/decks/{deck1_id}/flashcards",
-        json={"question": "Test question?", "answer": "Test answer"}
+        json={"question": "Test question?", "answer": "Test answer"},
     )
 
     # By default, should only return non-empty decks
@@ -168,7 +138,7 @@ def test_get_decks_include_empty(client):
     # Add flashcard to first deck
     client.post(
         f"/api/decks/{deck1_id}/flashcards",
-        json={"question": "Test question?", "answer": "Test answer"}
+        json={"question": "Test question?", "answer": "Test answer"},
     )
 
     # With include_empty=true, should return all decks
@@ -213,13 +183,14 @@ def test_get_deck_not_found(client):
 def test_update_deck(client):
     """Test updating a deck."""
     # Create a deck
-    create_response = client.post("/api/decks", json={"name": "Original Name", "source_file": "original.md"})
+    create_response = client.post(
+        "/api/decks", json={"name": "Original Name", "source_file": "original.md"}
+    )
     deck_id = create_response.json()["id"]
 
     # Update the deck
     response = client.put(
-        f"/api/decks/{deck_id}",
-        json={"name": "Updated Name", "source_file": "updated.md"}
+        f"/api/decks/{deck_id}", json={"name": "Updated Name", "source_file": "updated.md"}
     )
 
     assert response.status_code == 200
@@ -232,14 +203,13 @@ def test_update_deck(client):
 def test_update_deck_partial(client):
     """Test updating only some fields of a deck."""
     # Create a deck
-    create_response = client.post("/api/decks", json={"name": "Original Name", "source_file": "original.md"})
+    create_response = client.post(
+        "/api/decks", json={"name": "Original Name", "source_file": "original.md"}
+    )
     deck_id = create_response.json()["id"]
 
     # Update only the name
-    response = client.put(
-        f"/api/decks/{deck_id}",
-        json={"name": "New Name Only"}
-    )
+    response = client.put(f"/api/decks/{deck_id}", json={"name": "New Name Only"})
 
     assert response.status_code == 200
     data = response.json()
@@ -250,10 +220,7 @@ def test_update_deck_partial(client):
 
 def test_update_deck_not_found(client):
     """Test updating a non-existent deck."""
-    response = client.put(
-        "/api/decks/nonexistent-id",
-        json={"name": "New Name"}
-    )
+    response = client.put("/api/decks/nonexistent-id", json={"name": "New Name"})
     assert response.status_code == 404
 
 
@@ -266,7 +233,7 @@ def test_delete_deck(client):
     # Add a flashcard to the deck
     client.post(
         f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Test question?", "answer": "Test answer"}
+        json={"question": "Test question?", "answer": "Test answer"},
     )
 
     # Delete the deck
@@ -300,14 +267,11 @@ def test_bulk_delete_decks(client):
     # Add flashcards to one of them
     client.post(
         f"/api/decks/{deck1['id']}/flashcards",
-        json={"question": "Test question?", "answer": "Test answer"}
+        json={"question": "Test question?", "answer": "Test answer"},
     )
 
     # Bulk delete two decks
-    response = client.post(
-        "/api/decks/bulk-delete",
-        json={"deck_ids": [deck1["id"], deck2["id"]]}
-    )
+    response = client.post("/api/decks/bulk-delete", json={"deck_ids": [deck1["id"], deck2["id"]]})
 
     assert response.status_code == 200
     data = response.json()
@@ -330,8 +294,7 @@ def test_bulk_delete_partial_not_found(client):
 
     # Try to delete one existing and one non-existing deck
     response = client.post(
-        "/api/decks/bulk-delete",
-        json={"deck_ids": [deck1["id"], "nonexistent-id"]}
+        "/api/decks/bulk-delete", json={"deck_ids": [deck1["id"], "nonexistent-id"]}
     )
 
     assert response.status_code == 200
@@ -344,8 +307,7 @@ def test_bulk_delete_partial_not_found(client):
 def test_bulk_delete_no_decks_found(client):
     """Test bulk deleting when no decks exist."""
     response = client.post(
-        "/api/decks/bulk-delete",
-        json={"deck_ids": ["nonexistent-1", "nonexistent-2"]}
+        "/api/decks/bulk-delete", json={"deck_ids": ["nonexistent-1", "nonexistent-2"]}
     )
 
     assert response.status_code == 404
@@ -353,10 +315,7 @@ def test_bulk_delete_no_decks_found(client):
 
 def test_bulk_delete_empty_list(client):
     """Test bulk deleting with empty deck list."""
-    response = client.post(
-        "/api/decks/bulk-delete",
-        json={"deck_ids": []}
-    )
+    response = client.post("/api/decks/bulk-delete", json={"deck_ids": []})
 
     assert response.status_code == 422  # Validation error
 
@@ -365,7 +324,7 @@ def test_import_deck_from_file(client, sample_flashcard_file):
     """Test importing a deck from a markdown file."""
     response = client.post(
         "/api/decks/import-from-path",
-        json={"file_path": sample_flashcard_file, "deck_name": "Imported Deck"}
+        json={"file_path": sample_flashcard_file, "deck_name": "Imported Deck"},
     )
 
     assert response.status_code == 200
@@ -382,14 +341,8 @@ def test_get_flashcards_for_deck(client):
     deck_id = deck_response.json()["id"]
 
     # Create flashcards
-    client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Q1", "answer": "A1"}
-    )
-    client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Q2", "answer": "A2"}
-    )
+    client.post(f"/api/decks/{deck_id}/flashcards", json={"question": "Q1", "answer": "A1"})
+    client.post(f"/api/decks/{deck_id}/flashcards", json={"question": "Q2", "answer": "A2"})
 
     # Get flashcards
     response = client.get(f"/api/decks/{deck_id}/flashcards")
@@ -407,8 +360,7 @@ def test_create_flashcard(client):
 
     # Create flashcard
     response = client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "What is 2+2?", "answer": "4"}
+        f"/api/decks/{deck_id}/flashcards", json={"question": "What is 2+2?", "answer": "4"}
     )
 
     assert response.status_code == 200
@@ -427,7 +379,7 @@ def test_grade_answer(client, mocker):
 
     flashcard_response = client.post(
         f"/api/decks/{deck_id}/flashcards",
-        json={"question": "What is Python?", "answer": "A programming language"}
+        json={"question": "What is Python?", "answer": "A programming language"},
     )
     flashcard_id = flashcard_response.json()["id"]
 
@@ -437,18 +389,15 @@ def test_grade_answer(client, mocker):
         grade="Good",
         feedback="Well done! You covered the main concept.",
         key_concepts_covered=["programming language"],
-        key_concepts_missed=[]
+        key_concepts_missed=[],
     )
 
-    mocker.patch.object(GradingService, 'grade_answer', return_value=mock_result)
+    mocker.patch.object(GradingService, "grade_answer", return_value=mock_result)
 
     # Grade the answer
     response = client.post(
         "/api/grade",
-        json={
-            "flashcard_id": flashcard_id,
-            "user_answer": "Python is a programming language"
-        }
+        json={"flashcard_id": flashcard_id, "user_answer": "Python is a programming language"},
     )
 
     assert response.status_code == 200
@@ -490,10 +439,7 @@ def test_update_config(client):
     """Test updating configuration."""
     response = client.put(
         "/api/config",
-        json={
-            "anthropic_api_key": "new-anthropic-key",
-            "default_provider": "anthropic"
-        }
+        json={"anthropic_api_key": "new-anthropic-key", "default_provider": "anthropic"},
     )
 
     assert response.status_code == 200
@@ -506,15 +452,10 @@ def test_test_ai_connection(client, mocker):
     from backend.grading import GradingService
 
     mocker.patch.object(
-        GradingService,
-        'test_connection',
-        return_value=(True, "Connection successful")
+        GradingService, "test_connection", return_value=(True, "Connection successful")
     )
 
-    response = client.post(
-        "/api/config/test",
-        json={"provider": "anthropic"}
-    )
+    response = client.post("/api/config/test", json={"provider": "anthropic"})
 
     assert response.status_code == 200
     data = response.json()
@@ -529,20 +470,11 @@ def test_start_study_session(client):
     deck_response = client.post("/api/decks", json={"name": "Test Deck"})
     deck_id = deck_response.json()["id"]
 
-    client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Q1", "answer": "A1"}
-    )
-    client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Q2", "answer": "A2"}
-    )
+    client.post(f"/api/decks/{deck_id}/flashcards", json={"question": "Q1", "answer": "A1"})
+    client.post(f"/api/decks/{deck_id}/flashcards", json={"question": "Q2", "answer": "A2"})
 
     # Start session
-    response = client.post(
-        "/api/sessions/start",
-        json={"deck_id": deck_id}
-    )
+    response = client.post("/api/sessions/start", json={"deck_id": deck_id})
 
     assert response.status_code == 200
     data = response.json()
@@ -557,16 +489,10 @@ def test_get_next_card(client):
     deck_response = client.post("/api/decks", json={"name": "Test Deck"})
     deck_id = deck_response.json()["id"]
 
-    client.post(
-        f"/api/decks/{deck_id}/flashcards",
-        json={"question": "Q1", "answer": "A1"}
-    )
+    client.post(f"/api/decks/{deck_id}/flashcards", json={"question": "Q1", "answer": "A1"})
 
     # Start session
-    session_response = client.post(
-        "/api/sessions/start",
-        json={"deck_id": deck_id}
-    )
+    session_response = client.post("/api/sessions/start", json={"deck_id": deck_id})
     session_id = session_response.json()["session_id"]
 
     # Get next card
@@ -582,8 +508,7 @@ def test_get_next_card(client):
 def test_create_flashcard_invalid_deck(client):
     """Test creating a flashcard for non-existent deck."""
     response = client.post(
-        "/api/decks/invalid-id/flashcards",
-        json={"question": "Q", "answer": "A"}
+        "/api/decks/invalid-id/flashcards", json={"question": "Q", "answer": "A"}
     )
     assert response.status_code == 404
 
@@ -591,11 +516,7 @@ def test_create_flashcard_invalid_deck(client):
 def test_grade_answer_invalid_flashcard(client):
     """Test grading with non-existent flashcard."""
     response = client.post(
-        "/api/grade",
-        json={
-            "flashcard_id": "invalid-id",
-            "user_answer": "Some answer"
-        }
+        "/api/grade", json={"flashcard_id": "invalid-id", "user_answer": "Some answer"}
     )
     assert response.status_code == 404
 
@@ -603,7 +524,6 @@ def test_grade_answer_invalid_flashcard(client):
 def test_import_deck_invalid_file(client):
     """Test importing from non-existent file."""
     response = client.post(
-        "/api/decks/import-from-path",
-        json={"file_path": "/nonexistent/file.md"}
+        "/api/decks/import-from-path", json={"file_path": "/nonexistent/file.md"}
     )
     assert response.status_code == 400

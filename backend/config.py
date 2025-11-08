@@ -2,6 +2,7 @@
 Configuration management for the flashcard app.
 Handles API keys, model selection, and other settings.
 """
+
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from backend.schemas import ConfigResponse, ConfigUpdate
@@ -23,7 +24,7 @@ class Settings(BaseSettings):
     openai_model: str = "gpt-4o"
 
     # Database
-    database_url: str = "sqlite:///./study_cards.db"
+    database_url: str = "postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev"
 
     # Spaced Repetition defaults
     initial_interval_days: int = 1
@@ -33,9 +34,7 @@ class Settings(BaseSettings):
     maximum_interval_days: int = 180
 
     model_config = SettingsConfigDict(
-        env_file=".env",
-        env_file_encoding="utf-8",
-        case_sensitive=False
+        env_file=".env", env_file_encoding="utf-8", case_sensitive=False
     )
 
 
@@ -62,17 +61,10 @@ class ConfigManager:
         # Get values from database if available, otherwise use env
         if self.config_dao:
             default_provider = self.config_dao.get(
-                "default_provider",
-                self.settings.default_ai_provider
+                "default_provider", self.settings.default_ai_provider
             )
-            anthropic_model = self.config_dao.get(
-                "anthropic_model",
-                self.settings.anthropic_model
-            )
-            openai_model = self.config_dao.get(
-                "openai_model",
-                self.settings.openai_model
-            )
+            anthropic_model = self.config_dao.get("anthropic_model", self.settings.anthropic_model)
+            openai_model = self.config_dao.get("openai_model", self.settings.openai_model)
             anthropic_key = self.config_dao.get("anthropic_api_key")
             openai_key = self.config_dao.get("openai_api_key")
         else:
@@ -88,11 +80,21 @@ class ConfigManager:
 
         # Get spaced repetition settings
         if self.config_dao:
-            initial_interval_days = int(self.config_dao.get("initial_interval_days", self.settings.initial_interval_days))
-            easy_multiplier = float(self.config_dao.get("easy_multiplier", self.settings.easy_multiplier))
-            good_multiplier = float(self.config_dao.get("good_multiplier", self.settings.good_multiplier))
-            minimum_interval_days = int(self.config_dao.get("minimum_interval_days", self.settings.minimum_interval_days))
-            maximum_interval_days = int(self.config_dao.get("maximum_interval_days", self.settings.maximum_interval_days))
+            initial_interval_days = int(
+                self.config_dao.get("initial_interval_days", self.settings.initial_interval_days)
+            )
+            easy_multiplier = float(
+                self.config_dao.get("easy_multiplier", self.settings.easy_multiplier)
+            )
+            good_multiplier = float(
+                self.config_dao.get("good_multiplier", self.settings.good_multiplier)
+            )
+            minimum_interval_days = int(
+                self.config_dao.get("minimum_interval_days", self.settings.minimum_interval_days)
+            )
+            maximum_interval_days = int(
+                self.config_dao.get("maximum_interval_days", self.settings.maximum_interval_days)
+            )
         else:
             initial_interval_days = self.settings.initial_interval_days
             easy_multiplier = self.settings.easy_multiplier
@@ -228,11 +230,21 @@ class ConfigManager:
             SpacedRepetitionConfig with current settings
         """
         if self.config_dao:
-            initial_interval_days = int(self.config_dao.get("initial_interval_days", self.settings.initial_interval_days))
-            easy_multiplier = float(self.config_dao.get("easy_multiplier", self.settings.easy_multiplier))
-            good_multiplier = float(self.config_dao.get("good_multiplier", self.settings.good_multiplier))
-            minimum_interval_days = int(self.config_dao.get("minimum_interval_days", self.settings.minimum_interval_days))
-            maximum_interval_days = int(self.config_dao.get("maximum_interval_days", self.settings.maximum_interval_days))
+            initial_interval_days = int(
+                self.config_dao.get("initial_interval_days", self.settings.initial_interval_days)
+            )
+            easy_multiplier = float(
+                self.config_dao.get("easy_multiplier", self.settings.easy_multiplier)
+            )
+            good_multiplier = float(
+                self.config_dao.get("good_multiplier", self.settings.good_multiplier)
+            )
+            minimum_interval_days = int(
+                self.config_dao.get("minimum_interval_days", self.settings.minimum_interval_days)
+            )
+            maximum_interval_days = int(
+                self.config_dao.get("maximum_interval_days", self.settings.maximum_interval_days)
+            )
         else:
             initial_interval_days = self.settings.initial_interval_days
             easy_multiplier = self.settings.easy_multiplier

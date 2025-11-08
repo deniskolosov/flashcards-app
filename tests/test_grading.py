@@ -1,6 +1,7 @@
 """
 Tests for the AI grading service.
 """
+
 import json
 from unittest.mock import Mock, patch
 
@@ -19,7 +20,7 @@ def mock_anthropic_response():
         "grade": "Good",
         "feedback": "You covered the main concepts well. You missed mentioning X.",
         "key_concepts_covered": ["concept1", "concept2"],
-        "key_concepts_missed": ["concept3"]
+        "key_concepts_missed": ["concept3"],
     }
 
 
@@ -31,7 +32,7 @@ def mock_openai_response():
         "grade": "Perfect",
         "feedback": "Excellent answer! You covered all key points.",
         "key_concepts_covered": ["concept1", "concept2", "concept3"],
-        "key_concepts_missed": []
+        "key_concepts_missed": [],
     }
 
 
@@ -40,7 +41,7 @@ def test_grading_service_initialization():
     service = GradingService(
         anthropic_api_key="test_anthropic_key",
         openai_api_key="test_openai_key",
-        default_provider="anthropic"
+        default_provider="anthropic",
     )
 
     assert service.anthropic_api_key == "test_anthropic_key"
@@ -53,15 +54,17 @@ def test_grade_with_anthropic(mock_anthropic_response):
     service = GradingService(anthropic_api_key="test_key", default_provider="anthropic")
 
     # Mock the Anthropic client
-    with patch.object(service, 'anthropic_client') as mock_client:
+    with patch.object(service, "anthropic_client") as mock_client:
         mock_response = Mock()
-        mock_response.content = [Mock(text=f'```json\n{str(mock_anthropic_response).replace("'", '"')}\n```')]
+        mock_response.content = [
+            Mock(text=f"```json\n{str(mock_anthropic_response).replace("'", '"')}\n```")
+        ]
         mock_client.messages.create.return_value = mock_response
 
         result = service.grade_answer(
             question="What is Python?",
             reference_answer="Python is a programming language.",
-            user_answer="Python is a language for programming."
+            user_answer="Python is a language for programming.",
         )
 
         assert isinstance(result, GradingResult)
@@ -75,7 +78,7 @@ def test_grade_with_openai(mock_openai_response):
     service = GradingService(openai_api_key="test_key", default_provider="openai")
 
     # Mock the OpenAI client
-    with patch.object(service, 'openai_client') as mock_client:
+    with patch.object(service, "openai_client") as mock_client:
         mock_response = Mock()
         mock_response.choices = [Mock(message=Mock(content=json.dumps(mock_openai_response)))]
         mock_client.chat.completions.create.return_value = mock_response
@@ -84,7 +87,7 @@ def test_grade_with_openai(mock_openai_response):
             question="What is Python?",
             reference_answer="Python is a programming language.",
             user_answer="Python is a programming language.",
-            provider="openai"
+            provider="openai",
         )
 
         assert isinstance(result, GradingResult)
@@ -100,7 +103,7 @@ def test_grade_without_api_key():
         service.grade_answer(
             question="What is Python?",
             reference_answer="Python is a programming language.",
-            user_answer="Python is a language."
+            user_answer="Python is a language.",
         )
 
 
@@ -113,7 +116,7 @@ def test_grade_with_invalid_provider():
             question="What is Python?",
             reference_answer="Python is a programming language.",
             user_answer="Python is a language.",
-            provider="invalid_provider"
+            provider="invalid_provider",
         )
 
 
@@ -178,11 +181,9 @@ def test_test_connection_success():
     """Test the connection test with successful response."""
     service = GradingService(anthropic_api_key="test_key", default_provider="anthropic")
 
-    with patch.object(service, 'grade_answer') as mock_grade:
+    with patch.object(service, "grade_answer") as mock_grade:
         mock_grade.return_value = GradingResult(
-            score=100,
-            grade="Perfect",
-            feedback="Test successful"
+            score=100, grade="Perfect", feedback="Test successful"
         )
 
         success, message = service.test_connection()
@@ -196,7 +197,7 @@ def test_test_connection_failure():
     """Test the connection test with failed response."""
     service = GradingService(anthropic_api_key="test_key", default_provider="anthropic")
 
-    with patch.object(service, 'grade_answer') as mock_grade:
+    with patch.object(service, "grade_answer") as mock_grade:
         mock_grade.side_effect = Exception("API connection failed")
 
         success, message = service.test_connection()
@@ -213,7 +214,7 @@ def test_grading_result_validation():
         grade="Good",
         feedback="Well done!",
         key_concepts_covered=["concept1"],
-        key_concepts_missed=["concept2"]
+        key_concepts_missed=["concept2"],
     )
 
     assert result.score == 85
@@ -224,33 +225,31 @@ def test_grading_result_validation():
         GradingResult(
             score=101,  # > 100
             grade="Good",
-            feedback="Test"
+            feedback="Test",
         )
 
     with pytest.raises(ValidationError):
         GradingResult(
             score=-1,  # < 0
             grade="Good",
-            feedback="Test"
+            feedback="Test",
         )
 
 
 def test_grade_with_provider_override():
     """Test that provider override works."""
     service = GradingService(
-        anthropic_api_key="anthropic_key",
-        openai_api_key="openai_key",
-        default_provider="anthropic"
+        anthropic_api_key="anthropic_key", openai_api_key="openai_key", default_provider="anthropic"
     )
 
     mock_response = Mock()
-    mock_response.choices = [Mock(message=Mock(content=json.dumps({
-        "score": 95,
-        "grade": "Perfect",
-        "feedback": "Great"
-    })))]
+    mock_response.choices = [
+        Mock(
+            message=Mock(content=json.dumps({"score": 95, "grade": "Perfect", "feedback": "Great"}))
+        )
+    ]
 
-    with patch.object(service, 'openai_client') as mock_client:
+    with patch.object(service, "openai_client") as mock_client:
         mock_client.chat.completions.create.return_value = mock_response
 
         # Override to use OpenAI even though default is Anthropic
@@ -258,7 +257,7 @@ def test_grade_with_provider_override():
             question="Test",
             reference_answer="Test answer",
             user_answer="My answer",
-            provider="openai"
+            provider="openai",
         )
 
         # Should have called OpenAI, not Anthropic

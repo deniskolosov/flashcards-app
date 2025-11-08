@@ -13,9 +13,7 @@ wheels/
 .env
 
 # Database
-*.db
-*.sqlite
-*.sqlite3
+# (PostgreSQL data is stored externally)
 
 # IDE
 .vscode/

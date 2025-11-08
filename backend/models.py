@@ -1,8 +1,9 @@
 """
 SQLAlchemy ORM models for database tables.
 """
+
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from sqlalchemy import DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
@@ -14,12 +15,13 @@ class Base(DeclarativeBase):
 
 class DeckModel(Base):
     """SQLAlchemy model for decks table."""
+
     __tablename__ = "decks"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     name: Mapped[str] = mapped_column(String, nullable=False)
     source_file: Mapped[str | None] = mapped_column(String, nullable=True)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now())
     last_studied: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Relationships
@@ -30,13 +32,14 @@ class DeckModel(Base):
 
 class FlashcardModel(Base):
     """SQLAlchemy model for flashcards table."""
+
     __tablename__ = "flashcards"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     deck_id: Mapped[str] = mapped_column(String, ForeignKey("decks.id"), nullable=False)
     question: Mapped[str] = mapped_column(Text, nullable=False)
     answer: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now())
 
     # Relationships
     deck: Mapped["DeckModel"] = relationship("DeckModel", back_populates="flashcards")
@@ -47,11 +50,12 @@ class FlashcardModel(Base):
 
 class ReviewModel(Base):
     """SQLAlchemy model for reviews table."""
+
     __tablename__ = "reviews"
 
     id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
     flashcard_id: Mapped[str] = mapped_column(String, ForeignKey("flashcards.id"), nullable=False)
-    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(UTC))
+    reviewed_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now())
     user_answer: Mapped[str] = mapped_column(Text, nullable=False)
     ai_score: Mapped[int] = mapped_column(Integer, nullable=False)  # 0-100
     ai_grade: Mapped[str] = mapped_column(String, nullable=False)  # Perfect/Good/Partial/Wrong
@@ -59,9 +63,15 @@ class ReviewModel(Base):
     next_review_date: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
     # Spaced Repetition fields (SM-2 Modified algorithm)
-    ease_factor: Mapped[float] = mapped_column(Float, nullable=False, default=2.5)  # SM-2 ease factor
-    interval_days: Mapped[int] = mapped_column(Integer, nullable=False, default=1)  # Days until next review
-    repetitions: Mapped[int] = mapped_column(Integer, nullable=False, default=0)  # Number of successful reviews
+    ease_factor: Mapped[float] = mapped_column(
+        Float, nullable=False, default=2.5
+    )  # SM-2 ease factor
+    interval_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=1
+    )  # Days until next review
+    repetitions: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=0
+    )  # Number of successful reviews
 
     # Relationships
     flashcard: Mapped["FlashcardModel"] = relationship("FlashcardModel", back_populates="reviews")
@@ -69,6 +79,7 @@ class ReviewModel(Base):
 
 class ConfigModel(Base):
     """SQLAlchemy model for config table."""
+
     __tablename__ = "config"
 
     key: Mapped[str] = mapped_column(String, primary_key=True)

@@ -16,7 +16,7 @@ An AI-powered flashcard study application that uses Claude Sonnet 4 or GPT-4o to
 ## Tech Stack
 
 - **Backend**: FastAPI (Python)
-- **Database**: SQLite with SQLAlchemy ORM
+- **Database**: PostgreSQL with SQLAlchemy ORM
 - **AI**: Anthropic Claude Sonnet 4 / OpenAI GPT-4o
 - **Frontend**: Vanilla HTML/CSS/JavaScript
 - **Package Manager**: uv
@@ -56,7 +56,7 @@ OPENAI_API_KEY=sk-your-key-here
 DEFAULT_AI_PROVIDER=anthropic
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
 OPENAI_MODEL=gpt-4o
-DATABASE_URL=sqlite:///./study_cards.db
+DATABASE_URL=postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev
 ```
 
 4. **Start the server**:
@@ -306,7 +306,7 @@ All configuration can be set via environment variables in `.env`:
 - `DEFAULT_AI_PROVIDER` - Default provider: "anthropic" or "openai"
 - `ANTHROPIC_MODEL` - Claude model (default: claude-sonnet-4-20250514)
 - `OPENAI_MODEL` - OpenAI model (default: gpt-4o)
-- `DATABASE_URL` - Database connection string (default: sqlite:///./study_cards.db)
+- `DATABASE_URL` - PostgreSQL connection string (default: postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev)
 
 ### Runtime Configuration
 
@@ -326,9 +326,9 @@ curl -X PUT "http://localhost:8000/api/config" \
 
 ### Database Issues
 
-- Database file location: `./study_cards.db`
-- To reset database: `rm study_cards.db` (tables will be recreated on next run)
-- To inspect database: `sqlite3 study_cards.db` then use `.tables`, `.schema`, etc.
+- Database: PostgreSQL (configured via `DATABASE_URL` environment variable)
+- To reset database: Drop and recreate tables with `uv run alembic downgrade base && uv run alembic upgrade head`
+- To inspect database: Use `psql` with the connection string from `DATABASE_URL`
 
 ### Import Errors
 
@@ -361,14 +361,52 @@ curl -X PUT "http://localhost:8000/api/config" \
 
 ## Testing
 
-The project includes comprehensive test coverage:
+### ✨ Zero Setup Required
 
-- **65 total tests** across 4 test files
-- **100% passing** - all tests green
-- **Test-driven development** approach
-- Tests cover: parsers, database operations, AI grading (mocked), and API endpoints
+No manual database configuration needed! Just run:
 
-Run tests with: `uv run pytest tests/ -v`
+```bash
+make test
+```
+
+The test database is automatically created and configured.
+
+### Quick Commands
+
+```bash
+# Run all tests with coverage
+make test
+
+# Fast tests (no coverage)
+make test-fast
+
+# Run in Docker (completely isolated)
+make test-docker
+
+# Run specific test file
+uv run pytest tests/test_api.py -v
+```
+
+### Test Coverage
+
+- **129 comprehensive tests** across all components
+- **PostgreSQL integration** - same database as production
+- **API endpoint testing** - all routes covered
+- **Database operations** - full DAO testing
+- **AI grading simulation** - mocked for reliability
+- **Spaced repetition** - algorithm and integration tests
+
+### Test Database
+
+Tests use a separate `flashcards_test` database that is automatically:
+- ✅ Created on first test run
+- ✅ Cleaned between tests for isolation
+- ✅ Independent from your development data
+
+### Documentation
+
+For detailed testing information, troubleshooting, and advanced usage:
+👉 **[See TESTING.md](TESTING.md)**
 
 ## License
 

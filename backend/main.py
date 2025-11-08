@@ -1,9 +1,10 @@
 """
 FastAPI main application for flashcard study app.
 """
+
 import os
 import uuid
-from datetime import UTC, datetime
+from datetime import datetime
 
 from fastapi import Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,7 +15,6 @@ from backend.config import ConfigManager
 from backend.database import ConfigDAO, Database, DeckDAO, FlashcardDAO, ReviewDAO
 from backend.grading import GradingService
 from backend.parser import parse_flashcard_content, parse_flashcard_file, validate_flashcard_file
-from backend.spaced_repetition import calculate_next_review, grade_from_ai_grade
 from backend.schemas import (
     ConfigResponse,
     ConfigUpdate,
@@ -31,12 +31,13 @@ from backend.schemas import (
     ReviewCreate,
     StudySessionStart,
 )
+from backend.spaced_repetition import calculate_next_review, grade_from_ai_grade
 
 # Initialize FastAPI app
 app = FastAPI(
     title="Flashcard Study App",
     description="AI-powered flashcard study app with spaced repetition",
-    version="1.0.0"
+    version="1.0.0",
 )
 
 # Add CORS middleware
@@ -75,7 +76,7 @@ def get_grading_service() -> GradingService:
             openai_api_key=config_manager.get_api_key("openai"),
             default_provider=config_manager.get_default_provider(),
             anthropic_model=config_manager.get_model("anthropic"),
-            openai_model=config_manager.get_model("openai")
+            openai_model=config_manager.get_model("openai"),
         )
     return _grading_service_instance
 
@@ -140,7 +141,7 @@ async def get_all_decks(include_empty: bool = False, db: Database = Depends(get_
     for deck in decks:
         deck_dict = deck.model_dump()
         stats = review_dao.get_deck_stats(deck.id)
-        deck_dict['stats'] = stats.model_dump()
+        deck_dict["stats"] = stats.model_dump()
 
         # Filter out empty decks unless explicitly requested
         if include_empty or stats.total_cards > 0:
@@ -195,25 +196,23 @@ async def bulk_delete_decks(request: DeckBulkDeleteRequest, db: Database = Depen
     return {
         "message": message,
         "deleted_count": result["deleted_count"],
-        "requested_count": result["requested_count"]
+        "requested_count": result["requested_count"],
     }
 
 
 @app.post("/api/decks/import")
 async def import_deck(
-    file: UploadFile = File(...),
-    deck_name: str | None = Form(None),
-    db: Database = Depends(get_db)
+    file: UploadFile = File(...), deck_name: str | None = Form(None), db: Database = Depends(get_db)
 ):
     """Import a deck from an uploaded markdown file."""
     # Validate file type
-    if not file.filename or not file.filename.endswith('.md'):
+    if not file.filename or not file.filename.endswith(".md"):
         raise HTTPException(status_code=400, detail="File must be a markdown (.md) file")
 
     # Read file content
     try:
         content = await file.read()
-        content_str = content.decode('utf-8')
+        content_str = content.decode("utf-8")
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Failed to read file: {e!s}") from e
 
@@ -230,28 +229,24 @@ async def import_deck(
     deck_dao = DeckDAO(db)
     flashcard_dao = FlashcardDAO(db)
 
-    final_deck_name = deck_name or file.filename.replace('.md', '')
+    final_deck_name = deck_name or file.filename.replace(".md", "")
     deck = deck_dao.create(DeckCreate(name=final_deck_name, source_file=file.filename))
 
     # Create flashcards
     for card_data in flashcards:
         flashcard_dao.create(
-            deck.id,
-            FlashcardCreate(question=card_data["question"], answer=card_data["answer"])
+            deck.id, FlashcardCreate(question=card_data["question"], answer=card_data["answer"])
         )
 
     return {
         "deck": deck,
         "flashcards_count": len(flashcards),
-        "message": f"Successfully imported {len(flashcards)} flashcards"
+        "message": f"Successfully imported {len(flashcards)} flashcards",
     }
 
 
 @app.post("/api/decks/import-from-path")
-async def import_deck_from_path(
-    import_request: DeckImportRequest,
-    db: Database = Depends(get_db)
-):
+async def import_deck_from_path(import_request: DeckImportRequest, db: Database = Depends(get_db)):
     """Import a deck from a markdown file path (for local files)."""
     # Validate file
     is_valid, message = validate_flashcard_file(import_request.file_path)
@@ -265,20 +260,21 @@ async def import_deck_from_path(
     deck_dao = DeckDAO(db)
     flashcard_dao = FlashcardDAO(db)
 
-    deck_name = import_request.deck_name or import_request.file_path.split("/")[-1].replace(".md", "")
+    deck_name = import_request.deck_name or import_request.file_path.split("/")[-1].replace(
+        ".md", ""
+    )
     deck = deck_dao.create(DeckCreate(name=deck_name, source_file=import_request.file_path))
 
     # Create flashcards
     for card_data in flashcards:
         flashcard_dao.create(
-            deck.id,
-            FlashcardCreate(question=card_data["question"], answer=card_data["answer"])
+            deck.id, FlashcardCreate(question=card_data["question"], answer=card_data["answer"])
         )
 
     return {
         "deck": deck,
         "flashcards_count": len(flashcards),
-        "message": f"Successfully imported {len(flashcards)} flashcards"
+        "message": f"Successfully imported {len(flashcards)} flashcards",
     }
 
 
@@ -297,9 +293,7 @@ async def get_flashcards(deck_id: str, db: Database = Depends(get_db)):
 
 @app.post("/api/decks/{deck_id}/flashcards", response_model=Flashcard)
 async def create_flashcard(
-    deck_id: str,
-    flashcard_data: FlashcardCreate,
-    db: Database = Depends(get_db)
+    deck_id: str, flashcard_data: FlashcardCreate, db: Database = Depends(get_db)
 ):
     """Create a flashcard in a deck."""
     # Verify deck exists
@@ -324,7 +318,6 @@ async def get_due_cards(deck_id: str, db: Database = Depends(get_db)):
     return review_dao.get_due_flashcards(deck_id)
 
 
-
 # Study session endpoints
 @app.post("/api/sessions/start-due", response_model=dict)
 async def start_due_study_session(session_data: StudySessionStart, db: Database = Depends(get_db)):
@@ -336,15 +329,12 @@ async def start_due_study_session(session_data: StudySessionStart, db: Database 
     due_cards = review_dao.get_due_flashcards(session_data.deck_id)
 
     if not due_cards:
-        raise HTTPException(
-            status_code=404,
-            detail="No cards are due for review in this deck"
-        )
+        raise HTTPException(status_code=404, detail="No cards are due for review in this deck")
 
     # Apply card limit if specified
     cards_to_study = due_cards
     if session_data.card_limit:
-        cards_to_study = due_cards[:session_data.card_limit]
+        cards_to_study = due_cards[: session_data.card_limit]
 
     # Create session (use same structure as regular sessions)
     session_id = str(uuid.uuid4())
@@ -353,15 +343,15 @@ async def start_due_study_session(session_data: StudySessionStart, db: Database 
         "flashcards": [card.id for card in cards_to_study],  # Store IDs like regular sessions
         "current_index": 0,
         "total_cards": len(cards_to_study),
-        "started_at": datetime.now(UTC),
-        "type": "due_only"  # Mark this as a due-only session
+        "started_at": datetime.now(),
+        "type": "due_only",  # Mark this as a due-only session
     }
 
     return {
         "session_id": session_id,
         "total_due_cards": len(due_cards),
         "cards_in_session": len(cards_to_study),
-        "message": f"Started due cards study session with {len(cards_to_study)} cards"
+        "message": f"Started due cards study session with {len(cards_to_study)} cards",
     }
 
 
@@ -371,7 +361,7 @@ async def grade_answer(
     grade_request: GradeRequest,
     db: Database = Depends(get_db),
     grading_service: GradingService = Depends(get_grading_service),
-    config_manager: ConfigManager = Depends(get_config_manager)
+    config_manager: ConfigManager = Depends(get_config_manager),
 ):
     """Grade a user's answer."""
     # Get flashcard
@@ -385,7 +375,7 @@ async def grade_answer(
         result = grading_service.grade_answer(
             question=flashcard.question,
             reference_answer=flashcard.answer,
-            user_answer=grade_request.user_answer
+            user_answer=grade_request.user_answer,
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Grading error: {e!s}") from e
@@ -414,21 +404,23 @@ async def grade_answer(
         current_ease_factor=current_ease_factor,
         current_interval_days=current_interval_days,
         current_repetitions=current_repetitions,
-        config=config
+        config=config,
     )
 
     # Save review with spaced repetition data
-    review_dao.create(ReviewCreate(
-        flashcard_id=flashcard.id,
-        user_answer=grade_request.user_answer,
-        ai_score=result.score,
-        ai_grade=result.grade,
-        ai_feedback=result.feedback,
-        next_review_date=sr_result.next_review_date,
-        ease_factor=sr_result.ease_factor,
-        interval_days=sr_result.interval_days,
-        repetitions=sr_result.repetitions,
-    ))
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=flashcard.id,
+            user_answer=grade_request.user_answer,
+            ai_score=result.score,
+            ai_grade=result.grade,
+            ai_feedback=result.feedback,
+            next_review_date=sr_result.next_review_date,
+            ease_factor=sr_result.ease_factor,
+            interval_days=sr_result.interval_days,
+            repetitions=sr_result.repetitions,
+        )
+    )
 
     # Update deck last studied
     deck_dao = DeckDAO(db)
@@ -459,8 +451,7 @@ async def get_config(config_manager: ConfigManager = Depends(get_config_manager)
 
 @app.put("/api/config", response_model=ConfigResponse)
 async def update_config(
-    config_update: ConfigUpdate,
-    config_manager: ConfigManager = Depends(get_config_manager)
+    config_update: ConfigUpdate, config_manager: ConfigManager = Depends(get_config_manager)
 ):
     """Update configuration."""
     result = config_manager.update_config(config_update)
@@ -471,8 +462,7 @@ async def update_config(
 
 @app.post("/api/config/test")
 async def test_ai_connection(
-    request: dict,
-    grading_service: GradingService = Depends(get_grading_service)
+    request: dict, grading_service: GradingService = Depends(get_grading_service)
 ):
     """Test AI provider connection."""
     provider = request.get("provider")
@@ -482,10 +472,7 @@ async def test_ai_connection(
 
 # Study session endpoints
 @app.post("/api/sessions/start")
-async def start_study_session(
-    session_request: StudySessionStart,
-    db: Database = Depends(get_db)
-):
+async def start_study_session(session_request: StudySessionStart, db: Database = Depends(get_db)):
     """Start a study session."""
     # Verify deck exists
     deck_dao = DeckDAO(db)
@@ -502,7 +489,7 @@ async def start_study_session(
 
     # Apply card limit if specified
     if session_request.card_limit:
-        flashcards = flashcards[:session_request.card_limit]
+        flashcards = flashcards[: session_request.card_limit]
 
     # Create session
     session_id = str(uuid.uuid4())
@@ -510,13 +497,13 @@ async def start_study_session(
         "deck_id": session_request.deck_id,
         "flashcards": [fc.id for fc in flashcards],
         "current_index": 0,
-        "total_cards": len(flashcards)
+        "total_cards": len(flashcards),
     }
 
     return {
         "session_id": session_id,
         "deck_id": session_request.deck_id,
-        "total_cards": len(flashcards)
+        "total_cards": len(flashcards),
     }
 
 
@@ -548,10 +535,11 @@ async def get_next_card(session_id: str, db: Database = Depends(get_db)):
         "complete": False,
         "flashcard": flashcard.model_dump(),
         "card_number": current_index + 1,
-        "total_cards": session["total_cards"]
+        "total_cards": session["total_cards"],
     }
 
 
 if __name__ == "__main__":
     import uvicorn
+
     uvicorn.run(app, host="0.0.0.0", port=8000)

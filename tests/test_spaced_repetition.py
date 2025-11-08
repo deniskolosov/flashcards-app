@@ -1,17 +1,19 @@
 """
 Tests for spaced repetition functionality.
 """
-import pytest
+
 from datetime import UTC, datetime, timedelta
+
+import pytest
 from freezegun import freeze_time
 
 from backend.spaced_repetition import (
     Grade,
     SpacedRepetitionConfig,
     calculate_next_review,
+    get_due_cards_count,
     grade_from_ai_grade,
     is_card_due,
-    get_due_cards_count,
 )
 
 
@@ -78,14 +80,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # First repetition: should use initial interval
         assert result.repetitions == 1
         assert result.interval_days == 1
         assert result.ease_factor == 2.5 + 0.15  # Increased for perfect
-        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0)
 
     def test_new_card_good_grade(self):
         """Test first review with Good grade."""
@@ -95,14 +97,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # First repetition: should use initial interval
         assert result.repetitions == 1
         assert result.interval_days == 1
         assert result.ease_factor == 2.5  # Unchanged for good
-        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0)
 
     def test_new_card_partial_grade(self):
         """Test first review with Partial grade."""
@@ -112,14 +114,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # Partial: repetitions reset, ease factor decreased, interval halved
         assert result.repetitions == 0
         assert result.interval_days == 1  # max(1, 1//2) = 1
         assert result.ease_factor == 2.3  # 2.5 - 0.2, but >= 1.3
-        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0)
 
     def test_new_card_wrong_grade(self):
         """Test first review with Wrong grade."""
@@ -129,14 +131,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # Wrong: everything resets
         assert result.repetitions == 0
         assert result.interval_days == 1  # Reset to initial
         assert result.ease_factor == 2.3  # 2.5 - 0.2
-        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0)
 
     def test_second_review_good_grade(self):
         """Test second review with Good grade."""
@@ -146,14 +148,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=1,  # Second review
-            config=config
+            config=config,
         )
 
         # Second repetition: should use good_multiplier
         assert result.repetitions == 2
         assert result.interval_days == int(1 * 1.8)  # 1
         assert result.ease_factor == 2.5
-        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 16, 12, 0, 0)
 
     def test_second_review_perfect_grade(self):
         """Test second review with Perfect grade."""
@@ -163,14 +165,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=1,  # Second review
-            config=config
+            config=config,
         )
 
         # Second repetition with Perfect: should use easy_multiplier
         assert result.repetitions == 2
         assert result.interval_days == int(1 * 2.5)  # 2
         assert result.ease_factor == 2.5 + 0.15  # Increased
-        assert result.next_review_date == datetime(2025, 1, 17, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 17, 12, 0, 0)
 
     def test_third_review_good_grade(self):
         """Test third review with Good grade (uses ease factor)."""
@@ -180,14 +182,14 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=3,
             current_repetitions=2,  # Third+ review
-            config=config
+            config=config,
         )
 
         # Third+ repetition: should use ease factor
         assert result.repetitions == 3
         assert result.interval_days == int(3 * 2.5)  # 7
         assert result.ease_factor == 2.5
-        assert result.next_review_date == datetime(2025, 1, 22, 12, 0, 0, tzinfo=UTC)
+        assert result.next_review_date == datetime(2025, 1, 22, 12, 0, 0)
 
     def test_third_review_perfect_grade(self):
         """Test third review with Perfect grade."""
@@ -197,7 +199,7 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=3,
             current_repetitions=2,  # Third+ review
-            config=config
+            config=config,
         )
 
         # Third+ repetition with Perfect: ease factor * easy/good ratio
@@ -206,7 +208,9 @@ class TestCalculateNextReview:
         expected_interval = int(3 * 2.65 * 2.5 / 1.8)  # ~11
         assert result.interval_days == expected_interval
         assert result.ease_factor == 2.5 + 0.15
-        expected_date = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC) + timedelta(days=expected_interval)
+        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(
+            days=expected_interval
+        )
         assert result.next_review_date == expected_date
 
     def test_ease_factor_bounds(self):
@@ -219,7 +223,7 @@ class TestCalculateNextReview:
             current_ease_factor=1.4,  # Close to minimum
             current_interval_days=1,
             current_repetitions=1,
-            config=config
+            config=config,
         )
         assert result.ease_factor == 1.3  # Should hit minimum
 
@@ -229,16 +233,13 @@ class TestCalculateNextReview:
             current_ease_factor=2.9,  # Close to maximum
             current_interval_days=1,
             current_repetitions=1,
-            config=config
+            config=config,
         )
         assert result.ease_factor == 3.0  # Should hit maximum
 
     def test_interval_bounds(self):
         """Test that intervals respect minimum and maximum bounds."""
-        config = SpacedRepetitionConfig(
-            minimum_interval_days=2,
-            maximum_interval_days=10
-        )
+        config = SpacedRepetitionConfig(minimum_interval_days=2, maximum_interval_days=10)
 
         # Test minimum bound
         result = calculate_next_review(
@@ -246,7 +247,7 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=4,  # Half would be 2
             current_repetitions=1,
-            config=config
+            config=config,
         )
         assert result.interval_days == 2  # Should hit minimum
 
@@ -256,7 +257,7 @@ class TestCalculateNextReview:
             current_ease_factor=2.5,
             current_interval_days=8,
             current_repetitions=3,  # Would calculate to ~27
-            config=config
+            config=config,
         )
         assert result.interval_days == 10  # Should hit maximum
 
@@ -272,19 +273,19 @@ class TestCardDueChecking:
     @freeze_time("2025-01-15 12:00:00")
     def test_is_card_due_past_date(self):
         """Test that cards with past review dates are due."""
-        past_date = datetime(2025, 1, 14, 12, 0, 0, tzinfo=UTC)
+        past_date = datetime(2025, 1, 14, 12, 0, 0)
         assert is_card_due(past_date) is True
 
     @freeze_time("2025-01-15 12:00:00")
     def test_is_card_due_current_time(self):
         """Test that cards due right now are due."""
-        current_time = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)
+        current_time = datetime(2025, 1, 15, 12, 0, 0)
         assert is_card_due(current_time) is True
 
     @freeze_time("2025-01-15 12:00:00")
     def test_is_card_due_future_date(self):
         """Test that cards with future review dates are not due."""
-        future_date = datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)
+        future_date = datetime(2025, 1, 16, 12, 0, 0)
         assert is_card_due(future_date) is False
 
     def test_get_due_cards_count_empty_list(self):
@@ -295,11 +296,11 @@ class TestCardDueChecking:
     def test_get_due_cards_count_mixed_reviews(self):
         """Test due cards count with mixed due/not due cards."""
         reviews = [
-            {'next_review_date': None},  # Due (never reviewed)
-            {'next_review_date': datetime(2025, 1, 14, 12, 0, 0, tzinfo=UTC)},  # Due (past)
-            {'next_review_date': datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC)},  # Due (now)
-            {'next_review_date': datetime(2025, 1, 16, 12, 0, 0, tzinfo=UTC)},  # Not due (future)
-            {'next_review_date': datetime(2025, 1, 17, 12, 0, 0, tzinfo=UTC)},  # Not due (future)
+            {"next_review_date": None},  # Due (never reviewed)
+            {"next_review_date": datetime(2025, 1, 14, 12, 0, 0)},  # Due (past)
+            {"next_review_date": datetime(2025, 1, 15, 12, 0, 0)},  # Due (now)
+            {"next_review_date": datetime(2025, 1, 16, 12, 0, 0)},  # Not due (future)
+            {"next_review_date": datetime(2025, 1, 17, 12, 0, 0)},  # Not due (future)
         ]
         assert get_due_cards_count(reviews) == 3
 
@@ -318,7 +319,7 @@ class TestSpacedRepetitionWorkflow:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # Should be due tomorrow
@@ -334,7 +335,7 @@ class TestSpacedRepetitionWorkflow:
                 current_ease_factor=result1.ease_factor,
                 current_interval_days=result1.interval_days,
                 current_repetitions=result1.repetitions,
-                config=config
+                config=config,
             )
 
             # Should use good_multiplier
@@ -349,7 +350,7 @@ class TestSpacedRepetitionWorkflow:
                     current_ease_factor=result2.ease_factor,
                     current_interval_days=result2.interval_days,
                     current_repetitions=result2.repetitions,
-                    config=config
+                    config=config,
                 )
 
                 # Should use ease factor with perfect bonus
@@ -368,7 +369,7 @@ class TestSpacedRepetitionWorkflow:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=config
+            config=config,
         )
 
         # Second review: Wrong (reset everything)
@@ -377,7 +378,7 @@ class TestSpacedRepetitionWorkflow:
             current_ease_factor=result1.ease_factor,
             current_interval_days=result1.interval_days,
             current_repetitions=result1.repetitions,
-            config=config
+            config=config,
         )
 
         # Should reset repetitions and decrease ease factor
@@ -391,7 +392,7 @@ class TestSpacedRepetitionWorkflow:
             current_ease_factor=result2.ease_factor,
             current_interval_days=result2.interval_days,
             current_repetitions=result2.repetitions,
-            config=config
+            config=config,
         )
 
         # Should increment repetitions again
@@ -414,14 +415,14 @@ class TestSpacedRepetitionWorkflow:
             current_ease_factor=2.5,
             current_interval_days=5,
             current_repetitions=2,
-            config=custom_config
+            config=custom_config,
         )
 
         # Should use custom multipliers and bounds
         # Ease factor increases to 2.65, then: 5 * 2.65 * 3.0 / 2.2 = ~18
         expected_interval = min(
             int(5 * 2.65 * 3.0 / 2.2),  # Custom multipliers with increased ease factor
-            custom_config.maximum_interval_days
+            custom_config.maximum_interval_days,
         )
         expected_interval = max(expected_interval, custom_config.minimum_interval_days)
 
@@ -438,7 +439,7 @@ class TestSpacedRepetitionEdgeCases:
             current_ease_factor=2.5,
             current_interval_days=1,
             current_repetitions=0,
-            config=None  # Should use default
+            config=None,  # Should use default
         )
 
         assert result.repetitions == 1
@@ -455,12 +456,14 @@ class TestSpacedRepetitionEdgeCases:
             current_ease_factor=2.5,
             current_interval_days=200,  # Very large
             current_repetitions=5,
-            config=config
+            config=config,
         )
 
         # Should be capped at maximum
         assert result.interval_days <= config.maximum_interval_days
-        expected_date = datetime(2025, 1, 15, 12, 0, 0, tzinfo=UTC) + timedelta(days=result.interval_days)
+        expected_date = datetime(2025, 1, 15, 12, 0, 0) + timedelta(
+            days=result.interval_days
+        )
         assert result.next_review_date == expected_date
 
     def test_zero_interval_handling(self):
@@ -472,7 +475,7 @@ class TestSpacedRepetitionEdgeCases:
             current_ease_factor=2.5,
             current_interval_days=1,  # Half would be 0.5
             current_repetitions=1,
-            config=config
+            config=config,
         )
 
         # Should respect minimum interval

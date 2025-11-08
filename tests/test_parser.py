@@ -1,6 +1,7 @@
 """
 Tests for the markdown parser.
 """
+
 import os
 import tempfile
 
@@ -23,8 +24,8 @@ Python is a high-level programming language.
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 1
-    assert flashcards[0]['question'] == "What is Python?"
-    assert flashcards[0]['answer'] == "Python is a high-level programming language."
+    assert flashcards[0]["question"] == "What is Python?"
+    assert flashcards[0]["answer"] == "Python is a high-level programming language."
 
 
 def test_parse_multiple_flashcards():
@@ -49,8 +50,8 @@ JavaScript is a scripting language for web browsers.
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 2
-    assert flashcards[0]['question'] == "What is Python?"
-    assert flashcards[1]['question'] == "What is JavaScript?"
+    assert flashcards[0]["question"] == "What is Python?"
+    assert flashcards[1]["question"] == "What is JavaScript?"
 
 
 def test_parse_without_question_number():
@@ -67,8 +68,8 @@ def test_parse_without_question_number():
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 1
-    assert "What is the difference" in flashcards[0]['question']
-    assert "@staticmethod" in flashcards[0]['answer']
+    assert "What is the difference" in flashcards[0]["question"]
+    assert "@staticmethod" in flashcards[0]["answer"]
 
 
 def test_parse_multiline_answer():
@@ -87,9 +88,9 @@ This avoids locking for reads and provides transaction isolation.
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 1
-    assert "MVCC" in flashcards[0]['answer']
-    assert "VACUUM" in flashcards[0]['answer']
-    assert "transaction isolation" in flashcards[0]['answer']
+    assert "MVCC" in flashcards[0]["answer"]
+    assert "VACUUM" in flashcards[0]["answer"]
+    assert "transaction isolation" in flashcards[0]["answer"]
 
 
 def test_parse_empty_content():
@@ -167,7 +168,7 @@ Python is a programming language.
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 1
-    assert flashcards[0]['answer'] == "Python is a programming language."
+    assert flashcards[0]["answer"] == "Python is a programming language."
 
 
 def test_parse_flashcard_file(tmp_path):
@@ -186,8 +187,8 @@ def test_parse_flashcard_file(tmp_path):
     flashcards = parse_flashcard_file(str(file_path))
 
     assert len(flashcards) == 1
-    assert flashcards[0]['question'] == "What is 2+2?"
-    assert flashcards[0]['answer'] == "4"
+    assert flashcards[0]["question"] == "What is 2+2?"
+    assert flashcards[0]["answer"] == "4"
 
 
 def test_validate_valid_file(tmp_path):
@@ -253,7 +254,7 @@ They are commonly used for:
     flashcards = parse_flashcard_content(content)
 
     assert len(flashcards) == 1
-    assert "decorators" in flashcards[0]['question'].lower()
-    assert "Decorators are functions" in flashcards[0]['answer']
-    assert "```python" in flashcards[0]['answer']
-    assert "Logging" in flashcards[0]['answer']
+    assert "decorators" in flashcards[0]["question"].lower()
+    assert "Decorators are functions" in flashcards[0]["answer"]
+    assert "```python" in flashcards[0]["answer"]
+    assert "Logging" in flashcards[0]["answer"]

@@ -1,85 +1,83 @@
 """
 API tests for spaced repetition functionality.
 """
-import pytest
-from datetime import UTC, datetime, timedelta
-from freezegun import freeze_time
-from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
 
-from backend.main import app, get_db, get_config_manager, get_grading_service
-from backend.database import Database
+from datetime import UTC, datetime, timedelta
+
+import pytest
+from fastapi.testclient import TestClient
+from freezegun import freeze_time
+
 from backend.config import ConfigManager
+from backend.database import Database
 from backend.grading import GradingService
+from backend.main import app, get_config_manager, get_db, get_grading_service
 from backend.models import Base
 
 
-# Test database setup
-def create_test_db():
-    """Create a test database with in-memory SQLite."""
-    engine = create_engine(
-        "sqlite:///:memory:",
-        connect_args={"check_same_thread": False},
-        poolclass=StaticPool
-    )
-    TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-    Base.metadata.create_all(bind=engine)
-
-    db = Database("sqlite:///:memory:")
-    db.engine = engine
-    db.SessionLocal = TestingSessionLocal
-    return db
-
-
 @pytest.fixture
-def test_client():
+def test_client(test_db):
     """Create a test client with mocked dependencies."""
-    test_db = create_test_db()
 
     # Mock grading service to return predictable results
     class MockGradingService:
         def grade_answer(self, question, reference_answer, user_answer):
             # Return predictable grades based on user answer
             if "perfect" in user_answer.lower():
-                return type('GradingResult', (), {
-                    'score': 95,
-                    'grade': 'Perfect',
-                    'feedback': 'Excellent answer',
-                    'key_concepts_covered': ['concept1'],
-                    'key_concepts_missed': []
-                })()
+                return type(
+                    "GradingResult",
+                    (),
+                    {
+                        "score": 95,
+                        "grade": "Perfect",
+                        "feedback": "Excellent answer",
+                        "key_concepts_covered": ["concept1"],
+                        "key_concepts_missed": [],
+                    },
+                )()
             elif "good" in user_answer.lower():
-                return type('GradingResult', (), {
-                    'score': 85,
-                    'grade': 'Good',
-                    'feedback': 'Good answer',
-                    'key_concepts_covered': ['concept1'],
-                    'key_concepts_missed': ['concept2']
-                })()
+                return type(
+                    "GradingResult",
+                    (),
+                    {
+                        "score": 85,
+                        "grade": "Good",
+                        "feedback": "Good answer",
+                        "key_concepts_covered": ["concept1"],
+                        "key_concepts_missed": ["concept2"],
+                    },
+                )()
             elif "partial" in user_answer.lower():
-                return type('GradingResult', (), {
-                    'score': 60,
-                    'grade': 'Partial',
-                    'feedback': 'Partial understanding',
-                    'key_concepts_covered': [],
-                    'key_concepts_missed': ['concept1', 'concept2']
-                })()
+                return type(
+                    "GradingResult",
+                    (),
+                    {
+                        "score": 60,
+                        "grade": "Partial",
+                        "feedback": "Partial understanding",
+                        "key_concepts_covered": [],
+                        "key_concepts_missed": ["concept1", "concept2"],
+                    },
+                )()
             else:
-                return type('GradingResult', (), {
-                    'score': 30,
-                    'grade': 'Wrong',
-                    'feedback': 'Incorrect answer',
-                    'key_concepts_covered': [],
-                    'key_concepts_missed': ['concept1', 'concept2']
-                })()
+                return type(
+                    "GradingResult",
+                    (),
+                    {
+                        "score": 30,
+                        "grade": "Wrong",
+                        "feedback": "Incorrect answer",
+                        "key_concepts_covered": [],
+                        "key_concepts_missed": ["concept1", "concept2"],
+                    },
+                )()
 
     mock_grading_service = MockGradingService()
 
     # Create config manager with proper DAO
     config_manager = ConfigManager()
     from backend.database import ConfigDAO
+
     config_manager.config_dao = ConfigDAO(test_db)
 
     # Override dependencies
@@ -98,19 +96,17 @@ def test_client():
 def sample_deck_with_cards(test_client):
     """Create a sample deck with flashcards for testing."""
     # Create deck
-    response = test_client.post("/api/decks", json={
-        "name": "Spaced Repetition Test Deck"
-    })
+    response = test_client.post("/api/decks", json={"name": "Spaced Repetition Test Deck"})
     assert response.status_code == 200
     deck = response.json()
 
     # Create flashcards
     cards = []
     for i in range(3):
-        response = test_client.post(f"/api/decks/{deck['id']}/flashcards", json={
-            "question": f"Test Question {i+1}",
-            "answer": f"Test Answer {i+1}"
-        })
+        response = test_client.post(
+            f"/api/decks/{deck['id']}/flashcards",
+            json={"question": f"Test Question {i + 1}", "answer": f"Test Answer {i + 1}"},
+        )
         assert response.status_code == 200
         cards.append(response.json())
 
@@ -127,10 +123,9 @@ class TestSpacedRepetitionAPIIntegration:
         card = cards[0]
 
         # First review with "good" answer
-        response = test_client.post("/api/grade", json={
-            "flashcard_id": card["id"],
-            "user_answer": "This is a good answer"
-        })
+        response = test_client.post(
+            "/api/grade", json={"flashcard_id": card["id"], "user_answer": "This is a good answer"}
+        )
 
         assert response.status_code == 200
         result = response.json()
@@ -143,7 +138,9 @@ class TestSpacedRepetitionAPIIntegration:
         stats = response.json()
         assert stats["total_cards"] == 3
         assert stats["reviewed_cards"] == 1
-        assert stats["due_cards"] == 2  # 2 unreviewed cards (reviewed card due tomorrow is not due yet)
+        assert (
+            stats["due_cards"] == 2
+        )  # 2 unreviewed cards (reviewed card due tomorrow is not due yet)
 
     @freeze_time("2025-01-15 12:00:00")
     def test_multiple_reviews_progression(self, test_client, sample_deck_with_cards):
@@ -152,10 +149,9 @@ class TestSpacedRepetitionAPIIntegration:
         card = cards[0]
 
         # First review: Good
-        response = test_client.post("/api/grade", json={
-            "flashcard_id": card["id"],
-            "user_answer": "This is a good answer"
-        })
+        response = test_client.post(
+            "/api/grade", json={"flashcard_id": card["id"], "user_answer": "This is a good answer"}
+        )
         assert response.status_code == 200
 
         # Fast forward to next day
@@ -168,10 +164,10 @@ class TestSpacedRepetitionAPIIntegration:
             assert card["id"] in due_card_ids
 
             # Second review: Perfect
-            response = test_client.post("/api/grade", json={
-                "flashcard_id": card["id"],
-                "user_answer": "This is a perfect answer"
-            })
+            response = test_client.post(
+                "/api/grade",
+                json={"flashcard_id": card["id"], "user_answer": "This is a perfect answer"},
+            )
             assert response.status_code == 200
             result = response.json()
             assert result["grade"] == "Perfect"
@@ -195,10 +191,13 @@ class TestSpacedRepetitionAPIIntegration:
 
         # Grade one card to make it not immediately due
         with freeze_time("2025-01-15 12:00:00"):
-            response = test_client.post("/api/grade", json={
-                "flashcard_id": cards[0]["id"],
-                "user_answer": "This is a perfect answer"  # Will get long interval
-            })
+            response = test_client.post(
+                "/api/grade",
+                json={
+                    "flashcard_id": cards[0]["id"],
+                    "user_answer": "This is a perfect answer",  # Will get long interval
+                },
+            )
             assert response.status_code == 200
 
         # Check due cards again - should be fewer if the perfect answer got a longer interval
@@ -216,12 +215,10 @@ class TestSpacedRepetitionAPIIntegration:
 
     def test_start_due_study_session(self, test_client, sample_deck_with_cards):
         """Test starting a due-cards-only study session."""
-        deck, cards = sample_deck_with_cards
+        deck, _cards = sample_deck_with_cards
 
         # Start due cards session
-        response = test_client.post("/api/sessions/start-due", json={
-            "deck_id": deck["id"]
-        })
+        response = test_client.post("/api/sessions/start-due", json={"deck_id": deck["id"]})
         assert response.status_code == 200
         session = response.json()
 
@@ -237,18 +234,16 @@ class TestSpacedRepetitionAPIIntegration:
         # Make all cards not due by giving them future review dates
         with freeze_time("2025-01-15 12:00:00"):
             for card in cards:
-                response = test_client.post("/api/grade", json={
-                    "flashcard_id": card["id"],
-                    "user_answer": "This is a perfect answer"
-                })
+                response = test_client.post(
+                    "/api/grade",
+                    json={"flashcard_id": card["id"], "user_answer": "This is a perfect answer"},
+                )
                 assert response.status_code == 200
 
         # Fast forward but not enough to make cards due again
         with freeze_time("2025-01-16 12:00:00"):
             # Try to start due cards session
-            response = test_client.post("/api/sessions/start-due", json={
-                "deck_id": deck["id"]
-            })
+            response = test_client.post("/api/sessions/start-due", json={"deck_id": deck["id"]})
 
             # Might succeed if cards are due tomorrow, or fail if they have longer intervals
             # The exact behavior depends on the spaced repetition calculation
@@ -256,13 +251,12 @@ class TestSpacedRepetitionAPIIntegration:
 
     def test_start_due_study_session_with_card_limit(self, test_client, sample_deck_with_cards):
         """Test starting due session with card limit."""
-        deck, cards = sample_deck_with_cards
+        deck, _cards = sample_deck_with_cards
 
         # Start due cards session with limit
-        response = test_client.post("/api/sessions/start-due", json={
-            "deck_id": deck["id"],
-            "card_limit": 2
-        })
+        response = test_client.post(
+            "/api/sessions/start-due", json={"deck_id": deck["id"], "card_limit": 2}
+        )
         assert response.status_code == 200
         session = response.json()
 
@@ -285,10 +279,10 @@ class TestSpacedRepetitionAPIIntegration:
 
         # Grade one card
         with freeze_time("2025-01-15 12:00:00"):
-            response = test_client.post("/api/grade", json={
-                "flashcard_id": cards[0]["id"],
-                "user_answer": "This is a good answer"
-            })
+            response = test_client.post(
+                "/api/grade",
+                json={"flashcard_id": cards[0]["id"], "user_answer": "This is a good answer"},
+            )
             assert response.status_code == 200
 
         # Check updated stats
@@ -304,7 +298,7 @@ class TestSpacedRepetitionAPIIntegration:
 
     def test_get_all_decks_includes_due_counts(self, test_client, sample_deck_with_cards):
         """Test that getting all decks includes due card counts."""
-        deck, cards = sample_deck_with_cards
+        deck, _cards = sample_deck_with_cards
 
         # Get all decks
         response = test_client.get("/api/decks")
@@ -333,10 +327,9 @@ class TestSpacedRepetitionAPIIntegration:
         for i, (answer_text, expected_grade, expected_score) in enumerate(test_cases):
             card = cards[i % len(cards)]  # Cycle through cards
 
-            response = test_client.post("/api/grade", json={
-                "flashcard_id": card["id"],
-                "user_answer": answer_text
-            })
+            response = test_client.post(
+                "/api/grade", json={"flashcard_id": card["id"], "user_answer": answer_text}
+            )
 
             assert response.status_code == 200
             result = response.json()
@@ -351,12 +344,10 @@ class TestSpacedRepetitionAPIIntegration:
 
     def test_session_integration_with_spaced_repetition(self, test_client, sample_deck_with_cards):
         """Test that regular study sessions work with spaced repetition."""
-        deck, cards = sample_deck_with_cards
+        deck, _cards = sample_deck_with_cards
 
         # Start regular study session
-        response = test_client.post("/api/sessions/start", json={
-            "deck_id": deck["id"]
-        })
+        response = test_client.post("/api/sessions/start", json={"deck_id": deck["id"]})
         assert response.status_code == 200
         session = response.json()
         session_id = session["session_id"]
@@ -371,10 +362,13 @@ class TestSpacedRepetitionAPIIntegration:
         assert "total_cards" in card_data
 
         # Grade the card
-        response = test_client.post("/api/grade", json={
-            "flashcard_id": card_data["flashcard"]["id"],
-            "user_answer": "This is a good answer"
-        })
+        response = test_client.post(
+            "/api/grade",
+            json={
+                "flashcard_id": card_data["flashcard"]["id"],
+                "user_answer": "This is a good answer",
+            },
+        )
         assert response.status_code == 200
 
         # The spaced repetition data should be saved even in regular sessions
@@ -406,13 +400,16 @@ class TestSpacedRepetitionAPIIntegration:
     def test_update_spaced_repetition_config(self, test_client):
         """Test updating spaced repetition configuration."""
         # Update config
-        response = test_client.put("/api/config", json={
-            "initial_interval_days": 2,
-            "easy_multiplier": 3.0,
-            "good_multiplier": 2.0,
-            "minimum_interval_days": 1,
-            "maximum_interval_days": 365
-        })
+        response = test_client.put(
+            "/api/config",
+            json={
+                "initial_interval_days": 2,
+                "easy_multiplier": 3.0,
+                "good_multiplier": 2.0,
+                "minimum_interval_days": 1,
+                "maximum_interval_days": 365,
+            },
+        )
         assert response.status_code == 200
         updated_config = response.json()
 
@@ -441,12 +438,10 @@ class TestSpacedRepetitionAPIIntegration:
 
     def test_due_session_get_next_card(self, test_client, sample_deck_with_cards):
         """Test that getting next card works in due-cards-only sessions."""
-        deck, cards = sample_deck_with_cards
+        deck, _cards = sample_deck_with_cards
 
         # Start due cards session
-        response = test_client.post("/api/sessions/start-due", json={
-            "deck_id": deck["id"]
-        })
+        response = test_client.post("/api/sessions/start-due", json={"deck_id": deck["id"]})
         assert response.status_code == 200
         session = response.json()
         session_id = session["session_id"]

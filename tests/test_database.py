@@ -1,19 +1,13 @@
 """
 Tests for database models and DAOs.
 """
+
 from datetime import datetime
 
 import pytest
 
 from backend.database import ConfigDAO, Database, DeckDAO, FlashcardDAO, ReviewDAO
 from backend.schemas import DeckCreate, FlashcardCreate, ReviewCreate
-
-
-@pytest.fixture
-def db():
-    """Create an in-memory database for testing."""
-    database = Database("sqlite:///:memory:")
-    yield database
 
 
 @pytest.fixture
@@ -109,10 +103,7 @@ def test_delete_deck(deck_dao):
 def test_create_flashcard(deck_dao, flashcard_dao):
     """Test creating a flashcard."""
     deck = deck_dao.create(DeckCreate(name="Test Deck"))
-    flashcard_data = FlashcardCreate(
-        question="What is Python?",
-        answer="A programming language"
-    )
+    flashcard_data = FlashcardCreate(question="What is Python?", answer="A programming language")
 
     flashcard = flashcard_dao.create(deck.id, flashcard_data)
 
@@ -171,7 +162,7 @@ def test_create_review(deck_dao, flashcard_dao, review_dao):
         user_answer="My answer",
         ai_score=85,
         ai_grade="Good",
-        ai_feedback="Well done!"
+        ai_feedback="Well done!",
     )
 
     review = review_dao.create(review_data)
@@ -188,20 +179,24 @@ def test_get_reviews_by_flashcard(deck_dao, flashcard_dao, review_dao):
     deck = deck_dao.create(DeckCreate(name="Test Deck"))
     flashcard = flashcard_dao.create(deck.id, FlashcardCreate(question="Q1", answer="A1"))
 
-    review_dao.create(ReviewCreate(
-        flashcard_id=flashcard.id,
-        user_answer="Answer 1",
-        ai_score=70,
-        ai_grade="Good",
-        ai_feedback="Good job"
-    ))
-    review_dao.create(ReviewCreate(
-        flashcard_id=flashcard.id,
-        user_answer="Answer 2",
-        ai_score=90,
-        ai_grade="Perfect",
-        ai_feedback="Excellent"
-    ))
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=flashcard.id,
+            user_answer="Answer 1",
+            ai_score=70,
+            ai_grade="Good",
+            ai_feedback="Good job",
+        )
+    )
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=flashcard.id,
+            user_answer="Answer 2",
+            ai_score=90,
+            ai_grade="Perfect",
+            ai_feedback="Excellent",
+        )
+    )
 
     reviews = review_dao.get_by_flashcard(flashcard.id)
 
@@ -232,15 +227,25 @@ def test_get_deck_stats_with_reviews(deck_dao, flashcard_dao, review_dao):
     flashcard_dao.create(deck.id, FlashcardCreate(question="Q3", answer="A3"))
 
     # Create reviews
-    review_dao.create(ReviewCreate(
-        flashcard_id=fc1.id, user_answer="A", ai_score=95, ai_grade="Perfect", ai_feedback="Great"
-    ))
-    review_dao.create(ReviewCreate(
-        flashcard_id=fc2.id, user_answer="B", ai_score=75, ai_grade="Good", ai_feedback="Good"
-    ))
-    review_dao.create(ReviewCreate(
-        flashcard_id=fc2.id, user_answer="C", ai_score=50, ai_grade="Partial", ai_feedback="OK"
-    ))
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=fc1.id,
+            user_answer="A",
+            ai_score=95,
+            ai_grade="Perfect",
+            ai_feedback="Great",
+        )
+    )
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=fc2.id, user_answer="B", ai_score=75, ai_grade="Good", ai_feedback="Good"
+        )
+    )
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=fc2.id, user_answer="C", ai_score=50, ai_grade="Partial", ai_feedback="OK"
+        )
+    )
 
     stats = review_dao.get_deck_stats(deck.id)
 
@@ -309,13 +314,15 @@ def test_cascade_delete_flashcard_with_reviews(deck_dao, flashcard_dao, review_d
     """Test that deleting a flashcard also deletes its reviews."""
     deck = deck_dao.create(DeckCreate(name="Test Deck"))
     flashcard = flashcard_dao.create(deck.id, FlashcardCreate(question="Q1", answer="A1"))
-    review_dao.create(ReviewCreate(
-        flashcard_id=flashcard.id,
-        user_answer="A",
-        ai_score=80,
-        ai_grade="Good",
-        ai_feedback="Good"
-    ))
+    review_dao.create(
+        ReviewCreate(
+            flashcard_id=flashcard.id,
+            user_answer="A",
+            ai_score=80,
+            ai_grade="Good",
+            ai_feedback="Good",
+        )
+    )
 
     # Delete the flashcard
     flashcard_dao.delete(flashcard.id)

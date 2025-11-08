@@ -68,14 +68,6 @@ jobs:
             --cov-report=xml \
             --cov-report=term-missing
 
-      - name: Run tests with SQLite (compatibility check)
-        env:
-          DATABASE_URL: sqlite:///./test_flashcards.db
-          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
-          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: |
-          uv run alembic upgrade head
-          uv run pytest tests/ -v --tb=short
 
       - name: Upload coverage to Codecov
         if: github.event_name == 'push'

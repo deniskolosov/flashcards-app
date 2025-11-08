@@ -14,7 +14,7 @@ dependencies = [
     "python-dotenv>=1.2.1",
     "python-multipart>=0.0.20",
     "requests>=2.32.5",
-    "sqlalchemy[postgresql]>=2.0.44",
+    "sqlalchemy>=2.0.44",
     "uvicorn[standard]>=0.38.0",
 ]
 
@@ -23,6 +23,24 @@ dev = [
     "freezegun>=1.5.5",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
+    "pytest-cov>=5.0.0",
     "pytest-mock>=3.15.1",
     "ruff>=0.14.2",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = [
+    "-v",
+    "--strict-markers",
+    "--tb=short",
+    "--cov-report=term-missing",
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
 ]

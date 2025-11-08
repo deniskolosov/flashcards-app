@@ -1,16 +1,16 @@
 """
 Database DAOs (Data Access Objects) for managing database operations.
 """
-from datetime import UTC, datetime
+
+from datetime import datetime
 from urllib.parse import urlparse
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import NullPool, QueuePool
+from sqlalchemy.pool import QueuePool
 
 from backend.models import Base, ConfigModel, DeckModel, FlashcardModel, ReviewModel
-from backend.spaced_repetition import is_card_due
 from backend.schemas import (
     Deck,
     DeckCreate,
@@ -21,59 +21,38 @@ from backend.schemas import (
     Review,
     ReviewCreate,
 )
+from backend.spaced_repetition import is_card_due
 
 
 class Database:
-    """Database connection manager with support for SQLite and PostgreSQL."""
+    """Database connection manager for PostgreSQL."""
 
-    def __init__(self, database_url: str = "sqlite:///./study_cards.db"):
+    def __init__(
+        self,
+        database_url: str = "postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev",
+    ):
         self.database_url = database_url
         self.engine = self._create_engine(database_url)
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine)
         self.create_tables()
 
     def _create_engine(self, database_url: str) -> Engine:
-        """Create database engine with appropriate configuration for different databases."""
-        parsed_url = urlparse(database_url)
-        db_type = parsed_url.scheme
-
-        # Common engine parameters
+        """Create PostgreSQL database engine with connection pooling."""
+        # PostgreSQL configuration with connection pooling
         engine_kwargs = {
             "echo": False,
             "future": True,  # Use SQLAlchemy 2.0 style
+            "poolclass": QueuePool,
+            "pool_size": 10,  # Number of connections to maintain
+            "max_overflow": 20,  # Additional connections beyond pool_size
+            "pool_timeout": 30,  # Timeout when getting connection from pool
+            "pool_recycle": 3600,  # Recycle connections after 1 hour
+            "pool_pre_ping": True,  # Validate connections before use
+            "connect_args": {
+                "connect_timeout": 10,  # Connection timeout
+                "application_name": "flashcard-study-app",  # App identification
+            },
         }
-
-        if db_type == "sqlite":
-            # SQLite configuration
-            engine_kwargs.update({
-                "connect_args": {
-                    "check_same_thread": False,  # Allow multiple threads
-                    "timeout": 30,  # Connection timeout in seconds
-                },
-                "poolclass": NullPool,  # SQLite doesn't need connection pooling
-            })
-        elif db_type == "postgresql":
-            # PostgreSQL configuration with connection pooling
-            engine_kwargs.update({
-                "poolclass": QueuePool,
-                "pool_size": 10,  # Number of connections to maintain
-                "max_overflow": 20,  # Additional connections beyond pool_size
-                "pool_timeout": 30,  # Timeout when getting connection from pool
-                "pool_recycle": 3600,  # Recycle connections after 1 hour
-                "pool_pre_ping": True,  # Validate connections before use
-                "connect_args": {
-                    "connect_timeout": 10,  # Connection timeout
-                    "application_name": "flashcard-study-app",  # App identification
-                },
-            })
-        else:
-            # For other databases, use basic configuration
-            engine_kwargs.update({
-                "poolclass": QueuePool,
-                "pool_size": 5,
-                "max_overflow": 10,
-                "pool_timeout": 30,
-            })
 
         return create_engine(database_url, **engine_kwargs)
 
@@ -86,10 +65,10 @@ class Database:
         return self.SessionLocal()
 
     def test_connection(self) -> bool:
-        """Test database connection."""
+        """Test PostgreSQL database connection."""
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1" if "postgresql" in self.database_url else "SELECT 1")
+                conn.execute("SELECT 1")
                 return True
         except Exception:
             return False
@@ -115,10 +94,7 @@ class DeckDAO:
     def create(self, deck_data: DeckCreate) -> Deck:
         """Create a new deck."""
         with self.db.get_session() as session:
-            deck_model = DeckModel(
-                name=deck_data.name,
-                source_file=deck_data.source_file
-            )
+            deck_model = DeckModel(name=deck_data.name, source_file=deck_data.source_file)
             session.add(deck_model)
             session.commit()
             session.refresh(deck_model)
@@ -143,7 +119,7 @@ class DeckDAO:
         with self.db.get_session() as session:
             deck_model = session.query(DeckModel).filter(DeckModel.id == deck_id).first()
             if deck_model:
-                deck_model.last_studied = datetime.now(UTC)
+                deck_model.last_studied = datetime.now()
                 session.commit()
 
     def update(self, deck_id: str, deck_data: DeckUpdate) -> Deck | None:
@@ -185,10 +161,7 @@ class DeckDAO:
 
             session.commit()
 
-            return {
-                "deleted_count": deleted_count,
-                "requested_count": len(deck_ids)
-            }
+            return {"deleted_count": deleted_count, "requested_count": len(deck_ids)}
 
 
 class FlashcardDAO:
@@ -201,9 +174,7 @@ class FlashcardDAO:
         """Create a new flashcard."""
         with self.db.get_session() as session:
             flashcard_model = FlashcardModel(
-                deck_id=deck_id,
-                question=flashcard_data.question,
-                answer=flashcard_data.answer
+                deck_id=deck_id, question=flashcard_data.question, answer=flashcard_data.answer
             )
             session.add(flashcard_model)
             session.commit()
@@ -213,9 +184,9 @@ class FlashcardDAO:
     def get_by_id(self, flashcard_id: str) -> Flashcard | None:
         """Get a flashcard by ID."""
         with self.db.get_session() as session:
-            flashcard_model = session.query(FlashcardModel).filter(
-                FlashcardModel.id == flashcard_id
-            ).first()
+            flashcard_model = (
+                session.query(FlashcardModel).filter(FlashcardModel.id == flashcard_id).first()
+            )
             if flashcard_model:
                 return Flashcard.model_validate(flashcard_model)
             return None
@@ -223,17 +194,17 @@ class FlashcardDAO:
     def get_by_deck(self, deck_id: str) -> list[Flashcard]:
         """Get all flashcards for a deck."""
         with self.db.get_session() as session:
-            flashcard_models = session.query(FlashcardModel).filter(
-                FlashcardModel.deck_id == deck_id
-            ).all()
+            flashcard_models = (
+                session.query(FlashcardModel).filter(FlashcardModel.deck_id == deck_id).all()
+            )
             return [Flashcard.model_validate(fc) for fc in flashcard_models]
 
     def delete(self, flashcard_id: str) -> bool:
         """Delete a flashcard."""
         with self.db.get_session() as session:
-            flashcard_model = session.query(FlashcardModel).filter(
-                FlashcardModel.id == flashcard_id
-            ).first()
+            flashcard_model = (
+                session.query(FlashcardModel).filter(FlashcardModel.id == flashcard_id).first()
+            )
             if flashcard_model:
                 session.delete(flashcard_model)
                 session.commit()
@@ -269,18 +240,21 @@ class ReviewDAO:
     def get_by_flashcard(self, flashcard_id: str) -> list[Review]:
         """Get all reviews for a flashcard."""
         with self.db.get_session() as session:
-            review_models = session.query(ReviewModel).filter(
-                ReviewModel.flashcard_id == flashcard_id
-            ).order_by(ReviewModel.reviewed_at.desc()).all()
+            review_models = (
+                session.query(ReviewModel)
+                .filter(ReviewModel.flashcard_id == flashcard_id)
+                .order_by(ReviewModel.reviewed_at.desc())
+                .all()
+            )
             return [Review.model_validate(review) for review in review_models]
 
     def get_deck_stats(self, deck_id: str) -> DeckStats:
         """Get statistics for a deck."""
         with self.db.get_session() as session:
             # Get all flashcards for the deck
-            flashcard_models = session.query(FlashcardModel).filter(
-                FlashcardModel.deck_id == deck_id
-            ).all()
+            flashcard_models = (
+                session.query(FlashcardModel).filter(FlashcardModel.deck_id == deck_id).all()
+            )
             total_cards = len(flashcard_models)
 
             if total_cards == 0:
@@ -291,14 +265,14 @@ class ReviewDAO:
                     perfect_count=0,
                     good_count=0,
                     partial_count=0,
-                    wrong_count=0
+                    wrong_count=0,
                 )
 
             # Get all reviews for these flashcards
             flashcard_ids = [fc.id for fc in flashcard_models]
-            reviews = session.query(ReviewModel).filter(
-                ReviewModel.flashcard_id.in_(flashcard_ids)
-            ).all()
+            reviews = (
+                session.query(ReviewModel).filter(ReviewModel.flashcard_id.in_(flashcard_ids)).all()
+            )
 
             if not reviews:
                 # Still calculate due cards count even if no reviews exist
@@ -325,7 +299,7 @@ class ReviewDAO:
                 "Perfect": sum(1 for r in reviews if r.ai_grade == "Perfect"),
                 "Good": sum(1 for r in reviews if r.ai_grade == "Good"),
                 "Partial": sum(1 for r in reviews if r.ai_grade == "Partial"),
-                "Wrong": sum(1 for r in reviews if r.ai_grade == "Wrong")
+                "Wrong": sum(1 for r in reviews if r.ai_grade == "Wrong"),
             }
 
             # Calculate due cards count
@@ -346,9 +320,9 @@ class ReviewDAO:
         """Get the latest review for each flashcard in a deck."""
         with self.db.get_session() as session:
             # Get all flashcards for the deck
-            flashcard_models = session.query(FlashcardModel).filter(
-                FlashcardModel.deck_id == deck_id
-            ).all()
+            flashcard_models = (
+                session.query(FlashcardModel).filter(FlashcardModel.deck_id == deck_id).all()
+            )
 
             if not flashcard_models:
                 return []
@@ -358,9 +332,12 @@ class ReviewDAO:
 
             # Get the latest review for each flashcard
             for flashcard_id in flashcard_ids:
-                latest_review = session.query(ReviewModel).filter(
-                    ReviewModel.flashcard_id == flashcard_id
-                ).order_by(ReviewModel.reviewed_at.desc()).first()
+                latest_review = (
+                    session.query(ReviewModel)
+                    .filter(ReviewModel.flashcard_id == flashcard_id)
+                    .order_by(ReviewModel.reviewed_at.desc())
+                    .first()
+                )
 
                 if latest_review:
                     latest_reviews.append(Review.model_validate(latest_review))
@@ -371,9 +348,9 @@ class ReviewDAO:
         """Get count of cards due for review in a deck."""
         with self.db.get_session() as session:
             # Get all flashcards for the deck
-            flashcard_models = session.query(FlashcardModel).filter(
-                FlashcardModel.deck_id == deck_id
-            ).all()
+            flashcard_models = (
+                session.query(FlashcardModel).filter(FlashcardModel.deck_id == deck_id).all()
+            )
 
             if not flashcard_models:
                 return 0
@@ -383,9 +360,12 @@ class ReviewDAO:
 
             for flashcard_id in flashcard_ids:
                 # Get latest review for this flashcard
-                latest_review = session.query(ReviewModel).filter(
-                    ReviewModel.flashcard_id == flashcard_id
-                ).order_by(ReviewModel.reviewed_at.desc()).first()
+                latest_review = (
+                    session.query(ReviewModel)
+                    .filter(ReviewModel.flashcard_id == flashcard_id)
+                    .order_by(ReviewModel.reviewed_at.desc())
+                    .first()
+                )
 
                 # Check if card is due
                 if latest_review is None:
@@ -400,9 +380,9 @@ class ReviewDAO:
         """Get flashcards that are due for review in a deck."""
         with self.db.get_session() as session:
             # Get all flashcards for the deck
-            flashcard_models = session.query(FlashcardModel).filter(
-                FlashcardModel.deck_id == deck_id
-            ).all()
+            flashcard_models = (
+                session.query(FlashcardModel).filter(FlashcardModel.deck_id == deck_id).all()
+            )
 
             if not flashcard_models:
                 return []
@@ -411,9 +391,12 @@ class ReviewDAO:
 
             for flashcard_model in flashcard_models:
                 # Get latest review for this flashcard
-                latest_review = session.query(ReviewModel).filter(
-                    ReviewModel.flashcard_id == flashcard_model.id
-                ).order_by(ReviewModel.reviewed_at.desc()).first()
+                latest_review = (
+                    session.query(ReviewModel)
+                    .filter(ReviewModel.flashcard_id == flashcard_model.id)
+                    .order_by(ReviewModel.reviewed_at.desc())
+                    .first()
+                )
 
                 # Check if card is due
                 if latest_review is None:

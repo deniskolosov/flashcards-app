@@ -2,6 +2,7 @@
 AI grading service for comparing user answers with reference answers.
 Supports both Anthropic Claude and OpenAI GPT models.
 """
+
 import json
 
 from anthropic import Anthropic
@@ -38,7 +39,7 @@ class GradingService:
         openai_api_key: str | None = None,
         default_provider: str = "anthropic",
         anthropic_model: str = "claude-sonnet-4-20250514",
-        openai_model: str = "gpt-4o"
+        openai_model: str = "gpt-4o",
     ):
         self.anthropic_api_key = anthropic_api_key
         self.openai_api_key = openai_api_key
@@ -57,11 +58,7 @@ class GradingService:
             self.openai_client = OpenAI(api_key=openai_api_key)
 
     def grade_answer(
-        self,
-        question: str,
-        reference_answer: str,
-        user_answer: str,
-        provider: str | None = None
+        self, question: str, reference_answer: str, user_answer: str, provider: str | None = None
     ) -> GradingResult:
         """
         Grade a user's answer against the reference answer.
@@ -88,10 +85,7 @@ class GradingService:
             raise ValueError(f"Unknown provider: {provider}")
 
     def _grade_with_anthropic(
-        self,
-        question: str,
-        reference_answer: str,
-        user_answer: str
+        self, question: str, reference_answer: str, user_answer: str
     ) -> GradingResult:
         """Grade using Anthropic Claude."""
         if not self.anthropic_client:
@@ -109,12 +103,7 @@ Please grade the student's answer and provide feedback in JSON format."""
             response = self.anthropic_client.messages.create(
                 model=self.anthropic_model,
                 max_tokens=1024,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": f"{GRADING_SYSTEM_PROMPT}\n\n{user_prompt}"
-                    }
-                ]
+                messages=[{"role": "user", "content": f"{GRADING_SYSTEM_PROMPT}\n\n{user_prompt}"}],
             )
 
             # Parse the response
@@ -129,10 +118,7 @@ Please grade the student's answer and provide feedback in JSON format."""
             raise Exception(f"Error grading with Anthropic: {e!s}") from e
 
     def _grade_with_openai(
-        self,
-        question: str,
-        reference_answer: str,
-        user_answer: str
+        self, question: str, reference_answer: str, user_answer: str
     ) -> GradingResult:
         """Grade using OpenAI GPT."""
         if not self.openai_client:
@@ -151,9 +137,9 @@ Please grade the student's answer and provide feedback."""
                 model=self.openai_model,
                 messages=[
                     {"role": "system", "content": GRADING_SYSTEM_PROMPT},
-                    {"role": "user", "content": user_prompt}
+                    {"role": "user", "content": user_prompt},
                 ],
-                response_format={"type": "json_object"}
+                response_format={"type": "json_object"},
             )
 
             # Parse the response
@@ -178,7 +164,8 @@ Please grade the student's answer and provide feedback."""
 
         # Try to extract from code blocks
         import re
-        json_match = re.search(r'```(?:json)?\s*(\{.*?\})\s*```', text, re.DOTALL)
+
+        json_match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(1))
@@ -186,7 +173,7 @@ Please grade the student's answer and provide feedback."""
                 pass
 
         # Try to find JSON object in text
-        json_match = re.search(r'\{.*\}', text, re.DOTALL)
+        json_match = re.search(r"\{.*\}", text, re.DOTALL)
         if json_match:
             try:
                 return json.loads(json_match.group(0))
@@ -210,10 +197,7 @@ Please grade the student's answer and provide feedback."""
         try:
             # Use a simple test question
             self.grade_answer(
-                question="What is 2+2?",
-                reference_answer="4",
-                user_answer="4",
-                provider=provider
+                question="What is 2+2?", reference_answer="4", user_answer="4", provider=provider
             )
             return True, f"{provider.capitalize()} API connection successful"
         except Exception as e:
