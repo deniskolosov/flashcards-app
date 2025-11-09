@@ -1,0 +1,91 @@
+# Pre-commit hooks configuration for study-cards
+# Run locally with: pre-commit run --all-files
+# Install with: pre-commit install
+
+repos:
+  # Built-in hooks for basic file hygiene
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      - id: trailing-whitespace
+        description: Trim trailing whitespace
+      - id: end-of-file-fixer
+        description: Ensure files end with newline
+      - id: check-yaml
+        description: Check YAML syntax
+        files: \.(yaml|yml)$
+      - id: check-toml
+        description: Check TOML syntax
+        files: \.toml$
+      - id: check-json
+        description: Check JSON syntax
+        files: \.json$
+      - id: check-added-large-files
+        description: Check for large files
+        args: ['--maxkb=500']
+      - id: check-merge-conflict
+        description: Check for merge conflict markers
+      - id: debug-statements
+        description: Check for debug imports and breakpoints
+        language_version: python3
+
+  # Ruff for fast Python linting and formatting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.6.9
+    hooks:
+      - id: ruff
+        name: ruff linting
+        description: Run ruff linter
+        args: [--fix, --exit-non-zero-on-fix]
+        types: [python]
+      - id: ruff-format
+        name: ruff formatting
+        description: Run ruff formatter
+        types: [python]
+
+  # MyPy type checking
+  - repo: https://github.com/pre-commit/mirrors-mypy
+    rev: v1.8.0
+    hooks:
+      - id: mypy
+        name: mypy type checking
+        description: Run type checking
+        files: ^backend/
+        additional_dependencies:
+          - types-requests
+          - sqlalchemy[mypy]
+          - pydantic
+        args: [--config-file=pyproject.toml]
+
+  # Local hooks using project dependencies
+  - repo: local
+    hooks:
+      - id: bandit
+        name: bandit security
+        description: Run security checks
+        entry: uv run bandit
+        language: system
+        args: [-c, pyproject.toml, -r, backend/]
+        files: ^backend/.*\.py$
+
+# Configure which stages to run hooks on
+default_stages: [pre-commit]
+
+# Global configuration
+fail_fast: false  # Don't stop on first failure
+default_language_version:
+  python: python3.13
+
+# Exclude patterns
+exclude: |
+  (?x)^(
+    migrations/.*|
+    alembic/versions/.*|
+    \.venv/.*|
+    \.git/.*|
+    __pycache__/.*|
+    \.pytest_cache/.*|
+    htmlcov/.*|
+    \.mypy_cache/.*|
+    \.ruff_cache/.*
+  )$

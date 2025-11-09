@@ -5,7 +5,7 @@ Database DAOs (Data Access Objects) for managing database operations.
 from datetime import datetime
 from urllib.parse import urlparse
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -68,7 +68,7 @@ class Database:
         """Test PostgreSQL database connection."""
         try:
             with self.engine.connect() as conn:
-                conn.execute("SELECT 1")
+                conn.execute(text("SELECT 1"))
                 return True
         except Exception:
             return False

@@ -110,8 +110,7 @@ WORKDIR /app
 # Install uv
 RUN pip install uv
 
-# Copy dependencies from deps stage
-COPY --from=deps /root/.local /root/.local
+# Copy virtual environment from deps stage
 COPY --from=deps /app/.venv /app/.venv
 
 # Copy application code from builder

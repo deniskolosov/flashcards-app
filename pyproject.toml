@@ -20,7 +20,10 @@ dependencies = [
 
 [dependency-groups]
 dev = [
+    "bandit>=1.7.5",
     "freezegun>=1.5.5",
+    "mypy>=1.18.2",
+    "pre-commit>=3.5.0",
     "pytest>=8.4.2",
     "pytest-asyncio>=1.2.0",
     "pytest-cov>=5.0.0",
@@ -44,3 +47,104 @@ markers = [
     "integration: marks tests as integration tests",
     "unit: marks tests as unit tests",
 ]
+
+[tool.mypy]
+# Type checking configuration - Gradual adoption approach
+python_version = "3.13"
+show_error_codes = true
+warn_unused_configs = true
+
+# Start with basic checks and gradually increase strictness
+check_untyped_defs = true
+warn_redundant_casts = true
+warn_no_return = true
+warn_unreachable = true
+
+# Allow flexibility during transition period
+ignore_missing_imports = true
+no_strict_optional = true
+
+# Specify which files to check
+files = ["backend/"]
+
+# Exclude specific files/patterns that may have issues
+exclude = [
+    "^backend/migrations/",
+    "^tests/",
+    "^alembic/",
+]
+
+# External packages that don't have type stubs
+[[tool.mypy.overrides]]
+module = [
+    "anthropic.*",
+    "psycopg2.*",
+    "uvicorn.*",
+    "sqlalchemy.*",
+    "fastapi.*",
+    "pydantic.*",
+]
+ignore_missing_imports = true
+ignore_errors = true
+
+# TODO: Gradually enable stricter checking
+# Future improvements to enable:
+# - disallow_untyped_defs = true
+# - disallow_incomplete_defs = true
+# - disallow_untyped_decorators = true
+# - no_implicit_optional = true
+# - warn_return_any = true
+# - strict_equality = true
+
+[tool.coverage.run]
+source = ["backend"]
+omit = [
+    "*/tests/*",
+    "*/alembic/*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+]
+
+[tool.coverage.report]
+# Enforce minimum coverage threshold to prevent regression
+fail_under = 85
+show_missing = true
+skip_covered = false
+skip_empty = true
+
+# Exclude lines from coverage
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+[tool.coverage.xml]
+output = "coverage.xml"
+
+[tool.bandit]
+# Security linting configuration
+exclude_dirs = ["tests", "alembic/versions"]
+skips = [
+    "B101",  # Skip assert_used test
+    "B104",  # Skip hardcoded_bind_all_interfaces (needed for containers)
+    "B601",  # Skip paramiko calls (if we use SSH)
+]
+
+# Bandit severity levels: LOW, MEDIUM, HIGH
+severity = "medium"
+confidence = "medium"
+
+[tool.bandit.assert_used]
+# Allow asserts in test files
+exclude = ["*/tests/*"]

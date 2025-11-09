@@ -357,15 +357,29 @@ Server runs at `http://localhost:8000`
 
 ## Environment Variables
 
+After cleanup, only these variables are used by the application:
+
 ```bash
-# .env file
+# .env file (copy from .env.example)
 ANTHROPIC_API_KEY=sk-ant-your-key-here
 OPENAI_API_KEY=sk-your-key-here
 DEFAULT_AI_PROVIDER=anthropic  # or "openai"
 ANTHROPIC_MODEL=claude-sonnet-4-20250514
 OPENAI_MODEL=gpt-4o
 DATABASE_URL=postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev
+
+# Optional spaced repetition settings (defaults used if not set)
+INITIAL_INTERVAL_DAYS=1
+EASY_MULTIPLIER=2.5
+GOOD_MULTIPLIER=1.8
+MINIMUM_INTERVAL_DAYS=1
+MAXIMUM_INTERVAL_DAYS=180
 ```
+
+**Available Environment Templates:**
+- `.env.example` - Clean template for local development
+- `.env.development` - Development-specific configuration
+- `.env.docker` - Docker container configuration
 
 **Note**: API keys can also be set via the `/api/config` endpoint (stored in database).
 
@@ -699,10 +713,65 @@ uv add --dev <package-name>
 
 ---
 
-**Last Updated**: 2025-11-07
+## Recent Updates - November 2025
+
+### 🧹 Project Cleanup & CI/CD Improvements ✅ **COMPLETED**
+
+**Completed Tasks:**
+1. **Environment Variables Cleanup** ✅
+   - Removed all unused environment variables from `.env.example`, `.env.docker`, and `.env.development`
+   - Deleted unused environment files (`.env.staging`, `.env.production`)
+   - Only kept variables actually used by `backend/config.py` Settings class:
+     - `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `DEFAULT_AI_PROVIDER`
+     - `ANTHROPIC_MODEL`, `OPENAI_MODEL`, `DATABASE_URL`
+     - Optional spaced repetition settings with defaults
+
+2. **Docker Compose Cleanup** ✅
+   - Removed unused `docker-compose.staging.yml` and `docker-compose.production.yml`
+   - Kept only actively used files:
+     - `docker-compose.yml` (main development)
+     - `docker-compose.test.yml` (CI testing)
+     - `docker-compose.override.yml` (dev overrides)
+
+3. **Deployment Workflow Removal** ✅
+   - Removed disabled deployment workflow files
+   - Cleaned up deployment-related configurations
+
+4. **CI/CD Pipeline Improvements** ✅
+   - **MyPy Type Checking**: Added gradual adoption approach with proper configuration
+   - **Coverage Enforcement**: Added 85% minimum test coverage threshold
+   - **Pre-commit Hooks**: Comprehensive local code quality checks (Ruff, MyPy, Bandit)
+   - **Docker Build Testing**: Added multi-stage build validation to CI
+   - **Security Scanning**: Added Bandit security checks and Trivy vulnerability scanning
+   - **Database Migration Validation**: Added comprehensive migration testing including:
+     - Fresh migration testing (empty DB to latest)
+     - Schema validation with table existence checks
+     - Migration rollback and reapply testing
+     - Basic CRUD operation verification
+
+**Current CI Status:** 8/8 checks passing
+- Tests (with PostgreSQL)
+- Code Quality (Ruff linting + formatting)
+- Type Checking (MyPy)
+- Docker Build Test (development + production)
+- Security Scan (Trivy vulnerability scanner)
+- Database Migration Validation
+
+**Development Workflow Improvements:**
+- Added comprehensive Makefile with new commands:
+  - `make pre-commit-install` - Install pre-commit hooks
+  - `make migrate-test` - Test database migrations
+  - `make lint-docker` - Run linting in Docker
+- Pre-commit hooks run automatically on git commits
+- All code quality tools properly configured in `pyproject.toml`
+
+---
+
+**Last Updated**: 2025-11-09
 **Backend Status**: ✅ Complete (128/128 tests passing, ruff clean)
 **Frontend Status**: ✅ Complete (responsive UI with full functionality)
 **Documentation**: ✅ Complete (README.md + DEVELOPMENT.md)
 **Sample Data**: ✅ Complete (Python + PostgreSQL flashcards)
+**CI/CD Status**: ✅ Complete (8/8 checks passing, comprehensive pipeline)
 **V2 Status**: ✅ **COMPLETE AND READY TO USE!**
 **Next Priority**: Optional V3 features (custom notifications, voice input, multi-user support)

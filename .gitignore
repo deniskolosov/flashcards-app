@@ -9,8 +9,11 @@ wheels/
 # Virtual environments
 .venv
 
-# Environment
+# Environment files (exclude all except examples)
 .env
+.env.*
+!.env.example
+!.env.docker
 
 # Database
 # (PostgreSQL data is stored externally)
@@ -35,3 +38,4 @@ htmlcov/
 *.log
 sample_flashcards
 todo.md
+coverage.xml

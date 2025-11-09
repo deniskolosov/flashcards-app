@@ -6,6 +6,7 @@ Supports both Anthropic Claude and OpenAI GPT models.
 import json
 
 from anthropic import Anthropic
+from anthropic.types import TextBlock
 from openai import OpenAI
 
 from backend.schemas import GradingResult
@@ -107,7 +108,11 @@ Please grade the student's answer and provide feedback in JSON format."""
             )
 
             # Parse the response
-            response_text = response.content[0].text
+            first_block = response.content[0]
+            if isinstance(first_block, TextBlock):
+                response_text = first_block.text
+            else:
+                raise Exception("Unexpected response format from Anthropic API")
 
             # Try to extract JSON from the response
             result_data = self._extract_json(response_text)

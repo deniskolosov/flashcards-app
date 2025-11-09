@@ -61,7 +61,8 @@ jobs:
             --tb=short \
             --cov=backend \
             --cov-report=xml \
-            --cov-report=term-missing
+            --cov-report=term-missing \
+            --cov-fail-under=85
 
 
       - name: Upload coverage to Codecov
@@ -100,3 +101,190 @@ jobs:
 
       - name: Check import ordering
         run: uv run ruff check --select I .
+
+  type-check:
+    name: Type Checking
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Run type checking
+        run: uv run mypy
+
+  docker:
+    name: Docker Build Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Test development build
+        run: docker build --target development --tag study-cards:dev .
+
+      - name: Test production build
+        run: docker build --target production --tag study-cards:prod .
+
+  security:
+    name: Security Scan
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  migration-test:
+    name: Database Migration Validation
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_DB: flashcards_migration_test
+          POSTGRES_USER: flashcards
+          POSTGRES_PASSWORD: migration_test_password
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Test fresh migration (empty DB to latest)
+        env:
+          DATABASE_URL: postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test
+        run: |
+          echo "🔄 Testing fresh migration from empty database..."
+          uv run alembic upgrade head
+          echo "✅ Fresh migration successful"
+
+      - name: Validate database schema
+        env:
+          DATABASE_URL: postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test
+        run: |
+          echo "🔍 Validating database schema..."
+          uv run python -c "
+          from backend.database import Database
+          from backend.models import Base
+          from sqlalchemy import inspect, text
+
+          db = Database('postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test')
+          inspector = inspect(db.engine)
+
+          # Check that all expected tables exist
+          tables = inspector.get_table_names()
+          expected_tables = ['alembic_version', 'decks', 'flashcards', 'reviews', 'config']
+
+          for table in expected_tables:
+              if table not in tables:
+                  raise Exception(f'Missing table: {table}')
+              print(f'✅ Table {table} exists')
+
+          # Verify alembic version is at head
+          with db.get_session() as session:
+              result = session.execute(text('SELECT version_num FROM alembic_version')).scalar()
+              print(f'✅ Migration version: {result}')
+              if not result:
+                  raise Exception('No migration version found')
+
+          print('✅ Database schema validation passed')
+          "
+
+      - name: Test migration rollback and reapply
+        env:
+          DATABASE_URL: postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test
+        run: |
+          echo "🔄 Testing migration rollback..."
+          # Get current version
+          CURRENT=$(uv run alembic current | grep -o '[a-f0-9]\{12\}' | head -1)
+          echo "Current migration: $CURRENT"
+
+          # Get previous version (if any)
+          PREVIOUS=$(uv run alembic history | grep -o '[a-f0-9]\{12\}' | sed -n '2p')
+
+          if [ -n "$PREVIOUS" ] && [ "$PREVIOUS" != "$CURRENT" ]; then
+            echo "Rolling back to: $PREVIOUS"
+            uv run alembic downgrade $PREVIOUS
+            echo "✅ Rollback successful"
+
+            echo "Re-applying migration to: $CURRENT"
+            uv run alembic upgrade $CURRENT
+            echo "✅ Re-application successful"
+          else
+            echo "⚠️ Only one migration exists, skipping rollback test"
+          fi
+
+      - name: Test connection and basic operations
+        env:
+          DATABASE_URL: postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test
+        run: |
+          echo "🔍 Testing database operations..."
+          uv run python -c "
+          from backend.database import Database, DeckDAO
+          from backend.schemas import DeckCreate
+
+          # Test database connection and basic CRUD
+          db = Database('postgresql://flashcards:migration_test_password@localhost:5432/flashcards_migration_test')
+          deck_dao = DeckDAO(db)
+
+          # Create a test deck
+          deck = deck_dao.create(DeckCreate(name='Migration Test Deck'))
+          print(f'✅ Created deck: {deck.id}')
+
+          # Retrieve the deck
+          retrieved = deck_dao.get_by_id(deck.id)
+          assert retrieved is not None
+          assert retrieved.name == 'Migration Test Deck'
+          print('✅ Database operations working correctly')
+          "

@@ -315,4 +315,3 @@ python -c "from backend.database import Database; db = Database(); print(db.get_
 # Test AI providers
 curl -X POST http://localhost:8000/api/config/test -H "Content-Type: application/json" -d '{"provider": "anthropic"}'
 ```
-
