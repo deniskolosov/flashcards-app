@@ -6,6 +6,7 @@ import json
 from unittest.mock import Mock, patch
 
 import pytest
+from anthropic.types import TextBlock
 from pydantic import ValidationError
 
 from backend.grading import GradingService
@@ -56,9 +57,11 @@ def test_grade_with_anthropic(mock_anthropic_response):
     # Mock the Anthropic client
     with patch.object(service, "anthropic_client") as mock_client:
         mock_response = Mock()
-        mock_response.content = [
-            Mock(text=f"```json\n{str(mock_anthropic_response).replace("'", '"')}\n```")
-        ]
+        # Create a proper TextBlock instance for the content
+        text_block = TextBlock(
+            text=f"```json\n{str(mock_anthropic_response).replace("'", '"')}\n```", type="text"
+        )
+        mock_response.content = [text_block]
         mock_client.messages.create.return_value = mock_response
 
         result = service.grade_answer(
