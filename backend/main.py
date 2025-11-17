@@ -30,8 +30,10 @@ from backend.schemas import (
     GradingResult,
     ReviewCreate,
     StudySessionStart,
+    TranscriptionResponse,
 )
 from backend.spaced_repetition import calculate_next_review, grade_from_ai_grade
+from backend.whisper_service import WhisperService
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -52,6 +54,7 @@ app.add_middleware(
 # Global instances (will be replaced with dependency injection)
 _db_instance: Database | None = None
 _grading_service_instance: GradingService | None = None
+_whisper_service_instance: WhisperService | None = None
 _config_manager_instance: ConfigManager | None = None
 
 # Study sessions storage (in-memory for now, could be moved to DB)
@@ -81,6 +84,18 @@ def get_grading_service() -> GradingService:
     return _grading_service_instance
 
 
+def get_whisper_service() -> WhisperService:
+    """Dependency to get whisper service instance."""
+    global _whisper_service_instance
+    if _whisper_service_instance is None:
+        config_manager = get_config_manager()
+        _whisper_service_instance = WhisperService(
+            openai_api_key=config_manager.get_api_key("openai"),
+            model=config_manager.get_whisper_model(),
+        )
+    return _whisper_service_instance
+
+
 def get_config_manager() -> ConfigManager:
     """Dependency to get config manager instance."""
     global _config_manager_instance
@@ -95,6 +110,12 @@ def refresh_grading_service():
     """Refresh grading service after config update."""
     global _grading_service_instance
     _grading_service_instance = None
+
+
+def refresh_whisper_service():
+    """Refresh whisper service after config update."""
+    global _whisper_service_instance
+    _whisper_service_instance = None
 
 
 # Mount static files (frontend)
@@ -429,6 +450,58 @@ async def grade_answer(
     return result
 
 
+# Audio transcription endpoint
+@app.post("/api/transcribe", response_model=TranscriptionResponse)
+async def transcribe_audio(
+    audio: UploadFile = File(..., description="Audio file to transcribe"),
+    whisper_service: WhisperService = Depends(get_whisper_service),
+):
+    """Transcribe audio to text using OpenAI Whisper."""
+    # Validate file type
+    allowed_types = [
+        "audio/wav",
+        "audio/mp3",
+        "audio/webm",
+        "audio/ogg",
+        "audio/m4a",
+        "audio/mp4",
+        "audio/x-wav",
+        "audio/mpeg",
+    ]
+
+    if audio.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported audio format: {audio.content_type}. "
+            f"Supported formats: {', '.join(allowed_types)}",
+        )
+
+    # Check file size (limit to 25MB as per OpenAI Whisper API)
+    max_size = 25 * 1024 * 1024  # 25MB
+    audio_data = await audio.read()
+
+    if len(audio_data) > max_size:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Audio file too large. Maximum size is 25MB, got {len(audio_data) / 1024 / 1024:.1f}MB",
+        )
+
+    if len(audio_data) == 0:
+        raise HTTPException(status_code=400, detail="Empty audio file")
+
+    try:
+        result = whisper_service.transcribe_audio(
+            audio_data=audio_data, filename=audio.filename or "audio.webm"
+        )
+        return result
+    except ValueError as e:
+        # API key not configured
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        # Other transcription errors
+        raise HTTPException(status_code=500, detail=f"Transcription failed: {e!s}") from e
+
+
 # Statistics endpoint
 @app.get("/api/decks/{deck_id}/stats", response_model=DeckStats)
 async def get_deck_stats(deck_id: str, db: Database = Depends(get_db)):
@@ -455,8 +528,9 @@ async def update_config(
 ):
     """Update configuration."""
     result = config_manager.update_config(config_update)
-    # Refresh grading service with new config
+    # Refresh services with new config
     refresh_grading_service()
+    refresh_whisper_service()
     return result
 
 

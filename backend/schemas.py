@@ -177,6 +177,7 @@ class ConfigUpdate(BaseModel):
     default_provider: str | None = Field(None, pattern="^(anthropic|openai)$")
     anthropic_model: str | None = None
     openai_model: str | None = None
+    whisper_model: str | None = None
 
     # Spaced Repetition configuration
     initial_interval_days: int | None = Field(
@@ -202,6 +203,7 @@ class ConfigResponse(BaseModel):
     default_provider: str
     anthropic_model: str
     openai_model: str
+    whisper_model: str
     has_anthropic_key: bool
     has_openai_key: bool
 
@@ -227,3 +229,11 @@ class StudySessionCard(BaseModel):
     flashcard: Flashcard
     card_number: int
     total_cards: int
+
+
+# Audio transcription schemas
+class TranscriptionResponse(BaseModel):
+    """Response from audio transcription."""
+
+    text: str = Field(..., description="Transcribed text from audio")
+    confidence: float | None = Field(None, description="Confidence score (0-1) if available")

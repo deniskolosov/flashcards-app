@@ -65,10 +65,23 @@
 
                 <div id="answer-section" class="answer-section">
                     <label for="user-answer">Your Answer:</label>
-                    <textarea
-                        id="user-answer"
-                        rows="6"
-                        placeholder="Type your answer here..."></textarea>
+                    <div class="input-container">
+                        <textarea
+                            id="user-answer"
+                            rows="6"
+                            placeholder="Type your answer here..."></textarea>
+                        <button
+                            id="voice-input-btn"
+                            class="btn btn-voice hidden"
+                            title="Record voice answer (⌘+M)"
+                            aria-label="Record voice answer">
+                            🎤
+                        </button>
+                    </div>
+                    <div id="voice-status" class="voice-status hidden">
+                        <span class="voice-indicator"></span>
+                        <span class="voice-text">Recording...</span>
+                    </div>
 
                     <div class="actions">
                         <button id="submit-answer-btn" class="btn btn-primary">

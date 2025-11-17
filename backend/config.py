@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     # Model settings
     anthropic_model: str = "claude-sonnet-4-20250514"
     openai_model: str = "gpt-4o"
+    whisper_model: str = "whisper-1"
 
     # Database
     database_url: str = "postgresql://flashcards:flashcards_password@localhost:5432/flashcards_dev"
@@ -65,12 +66,14 @@ class ConfigManager:
             )
             anthropic_model = self.config_dao.get("anthropic_model", self.settings.anthropic_model)
             openai_model = self.config_dao.get("openai_model", self.settings.openai_model)
+            whisper_model = self.config_dao.get("whisper_model", self.settings.whisper_model)
             anthropic_key = self.config_dao.get("anthropic_api_key")
             openai_key = self.config_dao.get("openai_api_key")
         else:
             default_provider = self.settings.default_ai_provider
             anthropic_model = self.settings.anthropic_model
             openai_model = self.settings.openai_model
+            whisper_model = self.settings.whisper_model
             anthropic_key = self.settings.anthropic_api_key
             openai_key = self.settings.openai_api_key
 
@@ -106,6 +109,7 @@ class ConfigManager:
             default_provider=default_provider,
             anthropic_model=anthropic_model,
             openai_model=openai_model,
+            whisper_model=whisper_model,
             has_anthropic_key=bool(anthropic_key),
             has_openai_key=bool(openai_key),
             initial_interval_days=initial_interval_days,
@@ -145,6 +149,9 @@ class ConfigManager:
 
         if config_update.openai_model is not None:
             self.config_dao.set("openai_model", config_update.openai_model)
+
+        if config_update.whisper_model is not None:
+            self.config_dao.set("whisper_model", config_update.whisper_model)
 
         # Update spaced repetition settings if provided
         if config_update.initial_interval_days is not None:
@@ -215,6 +222,22 @@ class ConfigManager:
             return self.settings.openai_model
         else:
             return ""
+
+    def get_whisper_model(self) -> str:
+        """
+        Get Whisper model name.
+
+        Returns:
+            Whisper model name
+        """
+        # Try database first
+        if self.config_dao:
+            db_model = self.config_dao.get("whisper_model")
+            if db_model:
+                return db_model
+
+        # Fall back to environment/defaults
+        return self.settings.whisper_model
 
     def get_default_provider(self) -> str:
         """Get the default AI provider."""

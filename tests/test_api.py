@@ -12,9 +12,10 @@ from backend import main
 from backend.config import ConfigManager
 from backend.database import ConfigDAO, Database, DeckDAO, FlashcardDAO, ReviewDAO
 from backend.grading import GradingService
-from backend.main import app, get_config_manager, get_db, get_grading_service
+from backend.main import app, get_config_manager, get_db, get_grading_service, get_whisper_service
 from backend.models import Base
-from backend.schemas import GradingResult
+from backend.schemas import GradingResult, TranscriptionResponse
+from backend.whisper_service import WhisperService
 
 
 # Test fixtures
@@ -27,11 +28,13 @@ def client(test_db):
     grading_service = GradingService(
         anthropic_api_key="test_key", openai_api_key="test_key", default_provider="anthropic"
     )
+    whisper_service = WhisperService(openai_api_key="test_key", model="whisper-1")
 
     # Use FastAPI's dependency override system
     app.dependency_overrides[get_db] = lambda: test_db
     app.dependency_overrides[get_grading_service] = lambda: grading_service
     app.dependency_overrides[get_config_manager] = lambda: config_manager
+    app.dependency_overrides[get_whisper_service] = lambda: whisper_service
 
     # Ensure each test starts fresh by clearing the study sessions
     main.study_sessions.clear()
@@ -527,3 +530,170 @@ def test_import_deck_invalid_file(client):
         "/api/decks/import-from-path", json={"file_path": "/nonexistent/file.md"}
     )
     assert response.status_code == 400
+
+
+# Transcription API tests
+def create_test_audio_file():
+    """Create a minimal WAV file for testing."""
+    sample_rate = 8000
+    duration = 1
+    num_samples = sample_rate * duration
+
+    # WAV header
+    header = bytearray()
+    header.extend(b"RIFF")
+    header.extend((36 + num_samples * 2).to_bytes(4, "little"))
+    header.extend(b"WAVE")
+    header.extend(b"fmt ")
+    header.extend((16).to_bytes(4, "little"))
+    header.extend((1).to_bytes(2, "little"))
+    header.extend((1).to_bytes(2, "little"))
+    header.extend(sample_rate.to_bytes(4, "little"))
+    header.extend((sample_rate * 2).to_bytes(4, "little"))
+    header.extend((2).to_bytes(2, "little"))
+    header.extend((16).to_bytes(2, "little"))
+    header.extend(b"data")
+    header.extend((num_samples * 2).to_bytes(4, "little"))
+
+    # Silence data
+    silence = bytes(num_samples * 2)
+    return bytes(header) + silence
+
+
+def test_transcribe_audio_success(client):
+    """Test successful audio transcription."""
+    from unittest.mock import patch
+
+    from backend.whisper_service import WhisperService
+
+    # Create test audio file
+    audio_data = create_test_audio_file()
+
+    # Mock the transcribe_audio method on WhisperService
+    with patch.object(WhisperService, "transcribe_audio") as mock_transcribe:
+        mock_transcribe.return_value = TranscriptionResponse(text="This is a test transcription")
+
+        # Make request
+        response = client.post(
+            "/api/transcribe", files={"audio": ("test.wav", audio_data, "audio/wav")}
+        )
+
+        assert response.status_code == 200
+        data = response.json()
+        assert data["text"] == "This is a test transcription"
+        assert "confidence" in data
+
+        # Verify service was called
+        mock_transcribe.assert_called_once()
+
+
+def test_transcribe_audio_unsupported_format(client):
+    """Test transcription with unsupported audio format."""
+    response = client.post(
+        "/api/transcribe", files={"audio": ("test.txt", b"not audio data", "text/plain")}
+    )
+
+    assert response.status_code == 400
+    assert "Unsupported audio format" in response.json()["detail"]
+
+
+def test_transcribe_audio_too_large(client):
+    """Test transcription with file too large."""
+    # Create audio data larger than 25MB
+    large_audio = b"x" * (26 * 1024 * 1024)  # 26MB
+
+    response = client.post(
+        "/api/transcribe", files={"audio": ("large.wav", large_audio, "audio/wav")}
+    )
+
+    assert response.status_code == 400
+    assert "too large" in response.json()["detail"]
+
+
+def test_transcribe_audio_empty_file(client):
+    """Test transcription with empty audio file."""
+    response = client.post("/api/transcribe", files={"audio": ("empty.wav", b"", "audio/wav")})
+
+    assert response.status_code == 400
+    assert "Empty audio file" in response.json()["detail"]
+
+
+def test_transcribe_audio_service_error(client):
+    """Test transcription when service raises error."""
+    from unittest.mock import patch
+
+    from backend.whisper_service import WhisperService
+
+    audio_data = create_test_audio_file()
+
+    # Mock service to raise ValueError (API key not configured)
+    with patch.object(WhisperService, "transcribe_audio") as mock_transcribe:
+        mock_transcribe.side_effect = ValueError("OpenAI API key not configured")
+
+        response = client.post(
+            "/api/transcribe", files={"audio": ("test.wav", audio_data, "audio/wav")}
+        )
+
+        assert response.status_code == 503
+        assert "OpenAI API key not configured" in response.json()["detail"]
+
+
+def test_transcribe_audio_general_error(client):
+    """Test transcription when service raises general error."""
+    from unittest.mock import patch
+
+    audio_data = create_test_audio_file()
+
+    # Mock service to raise general exception
+    with patch("backend.main.get_whisper_service") as mock_get_service:
+        mock_service = mock_get_service.return_value
+        mock_service.transcribe_audio.side_effect = Exception("Network error")
+
+        response = client.post(
+            "/api/transcribe", files={"audio": ("test.wav", audio_data, "audio/wav")}
+        )
+
+        assert response.status_code == 500
+        assert "Transcription failed" in response.json()["detail"]
+
+
+@pytest.mark.parametrize(
+    "content_type,expected_success",
+    [
+        ("audio/wav", True),
+        ("audio/mp3", True),
+        ("audio/webm", True),
+        ("audio/ogg", True),
+        ("audio/m4a", True),
+        ("audio/mp4", True),
+        ("audio/x-wav", True),
+        ("audio/mpeg", True),
+        ("video/mp4", False),
+        ("application/json", False),
+    ],
+)
+def test_transcribe_audio_content_types(client, content_type, expected_success):
+    """Test various audio content types."""
+    from unittest.mock import patch
+
+    from backend.whisper_service import WhisperService
+
+    audio_data = create_test_audio_file()
+
+    if expected_success:
+        # Mock successful transcription
+        with patch.object(WhisperService, "transcribe_audio") as mock_transcribe:
+            mock_transcribe.return_value = TranscriptionResponse(text="Test transcription")
+
+            response = client.post(
+                "/api/transcribe", files={"audio": ("test.audio", audio_data, content_type)}
+            )
+
+            assert response.status_code == 200
+    else:
+        # Should fail with unsupported format
+        response = client.post(
+            "/api/transcribe", files={"audio": ("test.file", audio_data, content_type)}
+        )
+
+        assert response.status_code == 400
