@@ -672,6 +672,7 @@ function closeModal() {
     document.getElementById('deck-management-modal').classList.add('hidden');
     document.getElementById('delete-confirmation-modal').classList.add('hidden');
     document.getElementById('bulk-delete-confirmation-modal').classList.add('hidden');
+    document.getElementById('settings-modal').classList.add('hidden');
     currentEditingDeckId = null;
     currentDeletingDeckId = null;
 }
