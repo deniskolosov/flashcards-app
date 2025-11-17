@@ -645,9 +645,10 @@ make test && make lint
 **What these commands catch:**
 - ✅ All 129 test failures and database issues
 - ✅ Coverage threshold violations (85% minimum)
-- ✅ Code formatting and linting violations
-- ✅ Security vulnerabilities
-- ✅ Import sorting and type issues
+- ✅ Ruff linting violations (code quality)
+- ✅ Code formatting issues (exact CI match)
+- ✅ Import sorting and organization
+- ✅ Security vulnerabilities (Bandit)
 
 ---
 
@@ -665,9 +666,9 @@ make test          # Full test suite with coverage
 make test-fast     # Quick tests without coverage
 make test-docker   # Tests in Docker (isolated)
 
-# Code quality
-make lint          # All linting + security checks
-make format        # Auto-fix formatting issues
+# Code quality (synchronized with CI)
+make lint          # Exact same checks as CI: linting + formatting + imports
+make format        # Auto-fix formatting and linting issues
 make type-check    # MyPy type checking
 
 # Database operations

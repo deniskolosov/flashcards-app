@@ -65,7 +65,13 @@ test-clean:
 
 lint:
 	@echo "🔍 Running linting checks..."
+	@echo "  → Running ruff linting..."
 	@uv run ruff check .
+	@echo "  → Checking code formatting..."
+	@uv run ruff format --check .
+	@echo "  → Checking import ordering..."
+	@uv run ruff check --select I .
+	@echo "✅ All linting checks passed!"
 
 format:
 	@echo "✨ Formatting code..."
